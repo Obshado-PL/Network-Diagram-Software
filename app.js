@@ -22,10 +22,12 @@
     const state = {
         devices: [],
         connections: [],
+        textboxes: [],
         nextId: 1,
         tool: 'select',
         selectedDeviceIds: new Set(),
         selectedConnectionId: null,
+        selectedTextboxId: null,
         pendingConnection: null,
         isDragging: false,
         dragStart: null,
@@ -40,13 +42,14 @@
     };
 
     // ======================== DOM REFS ========================
-    let svg, devicesLayer, connectionsLayer, tempLineLayer, selectionLayer;
+    let svg, devicesLayer, connectionsLayer, tempLineLayer, selectionLayer, textboxesLayer;
     let deviceList, connectionTableBody, connectionCount;
 
     // ======================== INIT ========================
     document.addEventListener('DOMContentLoaded', () => {
         svg = document.getElementById('canvas');
         devicesLayer = document.getElementById('devices-layer');
+        textboxesLayer = document.getElementById('textboxes-layer');
         connectionsLayer = document.getElementById('connections-layer');
         tempLineLayer = document.getElementById('temp-line-layer');
         selectionLayer = document.getElementById('selection-layer');
@@ -139,6 +142,15 @@
     }
 
     function createMiniDeviceSVG(device) {
+        if (device.category === 'utilities') {
+            return `<svg viewBox="0 0 28 18" xmlns="${NS}">
+                <path d="M6,13 C3,13 2,9 5,7 C5,3 9,2 11,5 C13,2 17,2 18,5 C21,3 25,5 23,9 C26,10 25,13 22,13 Z"
+                    fill="#1a2440" stroke="#4488aa" stroke-width="1"/>
+                <circle cx="14" cy="9" r="3" fill="none" stroke="#88bbdd" stroke-width="0.6"/>
+                <ellipse cx="14" cy="9" rx="1.5" ry="3" fill="none" stroke="#88bbdd" stroke-width="0.4"/>
+                <line x1="11" y1="9" x2="17" y2="9" stroke="#88bbdd" stroke-width="0.4"/>
+            </svg>`;
+        }
         const isRouter = device.category === 'routers';
         if (isRouter) {
             // Router icon: circle with 4 arrows pointing outward
@@ -246,6 +258,11 @@
     function renderDeviceSVG(instance) {
         const catalog = getDeviceCatalogEntry(instance.modelId);
         if (!catalog) return null;
+
+        // Use cloud renderer for utilities
+        if (catalog.category === 'utilities') {
+            return renderCloudSVG(instance, catalog);
+        }
 
         const bodyWidth = calculateDeviceWidth(catalog);
         const isRouter = catalog.category === 'routers';
@@ -521,6 +538,172 @@
         return g;
     }
 
+    // ======================== CLOUD (INTERNET) RENDERER ========================
+    function renderCloudSVG(instance, catalog) {
+        const cloudW = 160;
+        const cloudH = 90;
+        const labelY = 14;
+        const portLabelH = 20;
+        const totalW = cloudW;
+        const totalH = labelY + cloudH + portLabelH;
+
+        const g = document.createElementNS(NS, 'g');
+        g.classList.add('canvas-device');
+        g.dataset.instanceId = instance.instanceId;
+        g.setAttribute('transform', `translate(${instance.x}, ${instance.y})`);
+
+        // Selection rect
+        const selRect = document.createElementNS(NS, 'rect');
+        selRect.setAttribute('x', -4);
+        selRect.setAttribute('y', -4);
+        selRect.setAttribute('width', totalW + 8);
+        selRect.setAttribute('height', totalH + 8);
+        selRect.setAttribute('rx', 6);
+        selRect.setAttribute('fill', 'transparent');
+        selRect.setAttribute('stroke', 'transparent');
+        selRect.setAttribute('stroke-width', 2);
+        selRect.classList.add('device-selection-rect');
+        g.appendChild(selRect);
+
+        // Cloud shape path
+        const cx = cloudW / 2;
+        const cy = labelY + cloudH / 2;
+        const cloud = document.createElementNS(NS, 'path');
+        cloud.setAttribute('d',
+            `M ${cx - 50},${cy + 15} ` +
+            `C ${cx - 70},${cy + 15} ${cx - 75},${cy - 10} ${cx - 55},${cy - 20} ` +
+            `C ${cx - 55},${cy - 40} ${cx - 30},${cy - 45} ${cx - 15},${cy - 35} ` +
+            `C ${cx - 5},${cy - 50} ${cx + 20},${cy - 50} ${cx + 30},${cy - 35} ` +
+            `C ${cx + 50},${cy - 45} ${cx + 70},${cy - 25} ${cx + 55},${cy - 10} ` +
+            `C ${cx + 75},${cy - 5} ${cx + 70},${cy + 15} ${cx + 50},${cy + 15} Z`
+        );
+        cloud.setAttribute('fill', '#1a2440');
+        cloud.setAttribute('stroke', '#4488aa');
+        cloud.setAttribute('stroke-width', 1.5);
+        cloud.classList.add('cloud-body');
+        cloud.classList.add('device-body');
+        g.appendChild(cloud);
+
+        // Fixed "Internet" text inside cloud (doesn't change on rename)
+        const text = document.createElementNS(NS, 'text');
+        text.setAttribute('x', cx);
+        text.setAttribute('y', cy + 2);
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('font-size', '13');
+        text.setAttribute('fill', '#88bbdd');
+        text.setAttribute('font-weight', '700');
+        text.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif');
+        text.setAttribute('pointer-events', 'none');
+        text.textContent = catalog.name;
+        g.appendChild(text);
+
+        // Globe icon inside cloud (above text)
+        const globe = document.createElementNS(NS, 'g');
+        globe.setAttribute('pointer-events', 'none');
+        globe.setAttribute('opacity', '0.4');
+        const gc = document.createElementNS(NS, 'circle');
+        gc.setAttribute('cx', cx); gc.setAttribute('cy', cy - 18);
+        gc.setAttribute('r', 8);
+        gc.setAttribute('fill', 'none'); gc.setAttribute('stroke', '#88bbdd'); gc.setAttribute('stroke-width', 0.8);
+        globe.appendChild(gc);
+        const ge1 = document.createElementNS(NS, 'ellipse');
+        ge1.setAttribute('cx', cx); ge1.setAttribute('cy', cy - 18);
+        ge1.setAttribute('rx', 4); ge1.setAttribute('ry', 8);
+        ge1.setAttribute('fill', 'none'); ge1.setAttribute('stroke', '#88bbdd'); ge1.setAttribute('stroke-width', 0.5);
+        globe.appendChild(ge1);
+        const gl1 = document.createElementNS(NS, 'line');
+        gl1.setAttribute('x1', cx - 8); gl1.setAttribute('y1', cy - 18);
+        gl1.setAttribute('x2', cx + 8); gl1.setAttribute('y2', cy - 18);
+        gl1.setAttribute('stroke', '#88bbdd'); gl1.setAttribute('stroke-width', 0.5);
+        globe.appendChild(gl1);
+        g.appendChild(globe);
+
+        // WAN port at bottom center (inside cloud body, above bottom edge)
+        instance._portPositions = {};
+        const port = catalog.ports[0];
+        const pw = getPortWidth(port.type);
+        const color = getPortColor(port.type);
+        const portX = cx - pw / 2;
+        const portY = labelY + cloudH - PORT_HEIGHT - 10;
+
+        const portSlot = document.createElementNS(NS, 'rect');
+        portSlot.setAttribute('x', portX);
+        portSlot.setAttribute('y', portY);
+        portSlot.setAttribute('width', pw);
+        portSlot.setAttribute('height', PORT_HEIGHT);
+        portSlot.setAttribute('rx', 2);
+        portSlot.setAttribute('fill', '#0d1117');
+        portSlot.setAttribute('stroke', color);
+        portSlot.setAttribute('stroke-width', 1.2);
+        portSlot.classList.add('port-shape');
+        portSlot.dataset.instanceId = instance.instanceId;
+        portSlot.dataset.portId = port.id;
+        const isConnected = state.connections.some(c =>
+            (c.sourceDeviceId === instance.instanceId && c.sourcePortId === port.id) ||
+            (c.targetDeviceId === instance.instanceId && c.targetPortId === port.id)
+        );
+        if (isConnected) portSlot.classList.add('connected');
+        g.appendChild(portSlot);
+
+        // Port indicator
+        const indicator = document.createElementNS(NS, 'rect');
+        indicator.setAttribute('x', portX + 2);
+        indicator.setAttribute('y', portY + 2);
+        indicator.setAttribute('width', pw - 4);
+        indicator.setAttribute('height', PORT_HEIGHT - 4);
+        indicator.setAttribute('rx', 1);
+        indicator.setAttribute('fill', color);
+        indicator.setAttribute('opacity', isConnected ? '0.5' : '0.15');
+        indicator.setAttribute('pointer-events', 'none');
+        g.appendChild(indicator);
+
+        // Port hitbox
+        const hitbox = document.createElementNS(NS, 'rect');
+        hitbox.setAttribute('x', portX - 2);
+        hitbox.setAttribute('y', portY - 4);
+        hitbox.setAttribute('width', pw + 4);
+        hitbox.setAttribute('height', PORT_HEIGHT + 12);
+        hitbox.setAttribute('fill', 'transparent');
+        hitbox.setAttribute('cursor', 'crosshair');
+        hitbox.classList.add('port-hitbox');
+        hitbox.dataset.instanceId = instance.instanceId;
+        hitbox.dataset.portId = port.id;
+        g.appendChild(hitbox);
+
+        // Port label below cloud
+        const pLabel = document.createElementNS(NS, 'text');
+        pLabel.setAttribute('x', cx);
+        pLabel.setAttribute('y', labelY + cloudH + 11);
+        pLabel.setAttribute('text-anchor', 'middle');
+        pLabel.setAttribute('font-size', '7');
+        pLabel.setAttribute('fill', color);
+        pLabel.setAttribute('font-family', 'Consolas, Courier New, monospace');
+        pLabel.setAttribute('font-weight', '600');
+        pLabel.setAttribute('opacity', '0.7');
+        pLabel.setAttribute('pointer-events', 'none');
+        pLabel.textContent = port.label;
+        g.appendChild(pLabel);
+
+        // Device label (above cloud)
+        const label = document.createElementNS(NS, 'text');
+        label.setAttribute('x', cx);
+        label.setAttribute('y', labelY - 6);
+        label.classList.add('device-label-text');
+        label.textContent = instance.label;
+        g.appendChild(label);
+
+        // Store port position (below port label area)
+        instance._portPositions[port.id] = {
+            localX: cx,
+            localY: totalH
+        };
+
+        instance._width = totalW;
+        instance._height = totalH;
+
+        return g;
+    }
+
     function getPortWorldPosition(instance, portId) {
         if (!instance._portPositions || !instance._portPositions[portId]) return null;
         const local = instance._portPositions[portId];
@@ -528,6 +711,106 @@
             x: instance.x + local.localX,
             y: instance.y + local.localY
         };
+    }
+
+    // ======================== TEXT BOX MANAGEMENT ========================
+    function addTextBox(x, y) {
+        pushUndo();
+        const tb = {
+            textboxId: 'tb_' + state.nextId++,
+            text: 'Text',
+            x: snapToGrid(x),
+            y: snapToGrid(y),
+            fontSize: 14
+        };
+        state.textboxes.push(tb);
+        const svgEl = renderTextBoxSVG(tb);
+        if (svgEl) textboxesLayer.appendChild(svgEl);
+        state.selectedTextboxId = tb.textboxId;
+        updateSelectionVisuals();
+        updateStatusBar();
+        autoSave();
+        // Immediately prompt for text
+        startTextEdit(tb);
+    }
+
+    function renderTextBoxSVG(tb) {
+        const g = document.createElementNS(NS, 'g');
+        g.classList.add('canvas-textbox');
+        g.dataset.textboxId = tb.textboxId;
+        g.setAttribute('transform', `translate(${tb.x}, ${tb.y})`);
+
+        // Split text into lines
+        const lines = tb.text.split('\n');
+        const lineHeight = tb.fontSize * 1.3;
+        const charWidth = tb.fontSize * 0.6;
+        const maxLineLen = Math.max(...lines.map(l => l.length), 4);
+        const textW = maxLineLen * charWidth + 16;
+        const textH = lines.length * lineHeight + 12;
+
+        // Background rect (subtle, dashed border)
+        const bg = document.createElementNS(NS, 'rect');
+        bg.setAttribute('x', 0);
+        bg.setAttribute('y', 0);
+        bg.setAttribute('width', textW);
+        bg.setAttribute('height', textH);
+        bg.setAttribute('rx', 4);
+        bg.setAttribute('fill', 'rgba(13, 17, 23, 0.6)');
+        bg.setAttribute('stroke', '#30363d');
+        bg.setAttribute('stroke-width', 1);
+        bg.setAttribute('stroke-dasharray', '4,2');
+        bg.classList.add('textbox-bg');
+        g.appendChild(bg);
+
+        // Text lines
+        lines.forEach((line, i) => {
+            const t = document.createElementNS(NS, 'text');
+            t.setAttribute('x', 8);
+            t.setAttribute('y', 6 + tb.fontSize + i * lineHeight);
+            t.setAttribute('font-size', tb.fontSize);
+            t.setAttribute('fill', '#e6edf3');
+            t.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif');
+            t.textContent = line;
+            g.appendChild(t);
+        });
+
+        // Store dimensions for bounds/selection
+        tb._width = textW;
+        tb._height = textH;
+
+        return g;
+    }
+
+    function findTextBox(textboxId) {
+        return state.textboxes.find(tb => tb.textboxId === textboxId);
+    }
+
+    function deleteTextBox(textboxId) {
+        pushUndo();
+        state.textboxes = state.textboxes.filter(tb => tb.textboxId !== textboxId);
+        const el = textboxesLayer.querySelector(`[data-textbox-id="${textboxId}"]`);
+        if (el) el.remove();
+        if (state.selectedTextboxId === textboxId) state.selectedTextboxId = null;
+        updateStatusBar();
+        autoSave();
+    }
+
+    function rerenderTextBox(tb) {
+        const old = textboxesLayer.querySelector(`[data-textbox-id="${tb.textboxId}"]`);
+        if (old) old.remove();
+        const svgEl = renderTextBoxSVG(tb);
+        if (svgEl) textboxesLayer.appendChild(svgEl);
+        updateSelectionVisuals();
+    }
+
+    function startTextEdit(tb) {
+        const text = prompt('Enter text:', tb.text);
+        if (text !== null && text.trim()) {
+            pushUndo();
+            tb.text = text.trim();
+            rerenderTextBox(tb);
+            autoSave();
+        }
     }
 
     // ======================== CANVAS EVENTS ========================
@@ -605,9 +888,38 @@
                         state.selectedConnectionId = null;
                     }
                 }
+                state.selectedTextboxId = null;
                 state.selectedDeviceIds.add(instanceId);
                 updateSelectionVisuals();
                 startDeviceDrag(e, pos);
+                return;
+            }
+            return;
+        }
+
+        // Check if clicking a text box
+        const textboxGroup = e.target.closest('.canvas-textbox');
+        if (textboxGroup) {
+            const tbId = textboxGroup.dataset.textboxId;
+            if (state.tool === 'delete') {
+                deleteTextBox(tbId);
+                return;
+            }
+            if (state.tool === 'select') {
+                state.selectedDeviceIds.clear();
+                state.selectedConnectionId = null;
+                state.selectedTextboxId = tbId;
+                updateSelectionVisuals();
+                // Start text box drag
+                const tb = findTextBox(tbId);
+                if (tb) {
+                    state.isDragging = true;
+                    state.dragStart = {
+                        mouseX: pos.x, mouseY: pos.y,
+                        origins: [{ id: tbId, x: tb.x, y: tb.y, isTextbox: true }]
+                    };
+                    svg.classList.add('dragging-device');
+                }
                 return;
             }
             return;
@@ -628,10 +940,16 @@
         }
 
         // Empty canvas click
+        if (state.tool === 'text') {
+            addTextBox(pos.x, pos.y);
+            return;
+        }
+
         if (state.tool === 'select') {
             if (!e.shiftKey) {
                 state.selectedDeviceIds.clear();
                 state.selectedConnectionId = null;
+                state.selectedTextboxId = null;
                 updateSelectionVisuals();
             }
             startSelectionRect(pos);
@@ -671,6 +989,8 @@
         const portHit = e.target.closest('.port-hitbox');
         if (portHit) {
             svg.style.cursor = 'crosshair';
+        } else if (e.target.closest('.canvas-textbox') && state.tool === 'select') {
+            svg.style.cursor = 'move';
         } else if (e.target.closest('.canvas-device') && state.tool === 'select') {
             svg.style.cursor = 'move';
         }
@@ -705,6 +1025,12 @@
         if (deviceGroup) {
             const instance = findDevice(deviceGroup.dataset.instanceId);
             if (instance) startRename(instance);
+            return;
+        }
+        const textboxGroup = e.target.closest('.canvas-textbox');
+        if (textboxGroup) {
+            const tb = findTextBox(textboxGroup.dataset.textboxId);
+            if (tb) startTextEdit(tb);
         }
     }
 
@@ -772,7 +1098,7 @@
     }
 
     function zoomFit() {
-        if (state.devices.length === 0) {
+        if (state.devices.length === 0 && state.textboxes.length === 0) {
             state.viewBox = { x: -200, y: -100, w: 1920, h: 1080 };
             state.zoom = 1;
             updateViewBox();
@@ -786,6 +1112,12 @@
             minY = Math.min(minY, d.y);
             maxX = Math.max(maxX, d.x + (d._width || 200));
             maxY = Math.max(maxY, d.y + (d._height || 100));
+        });
+        state.textboxes.forEach(tb => {
+            minX = Math.min(minX, tb.x);
+            minY = Math.min(minY, tb.y);
+            maxX = Math.max(maxX, tb.x + (tb._width || 100));
+            maxY = Math.max(maxY, tb.y + (tb._height || 30));
         });
 
         const padding = 100;
@@ -882,6 +1214,11 @@
     }
 
     function deleteSelectedDevices() {
+        if (state.selectedTextboxId) {
+            deleteTextBox(state.selectedTextboxId);
+            return;
+        }
+
         if (state.selectedDeviceIds.size === 0 && !state.selectedConnectionId) return;
 
         if (state.selectedConnectionId) {
@@ -911,6 +1248,15 @@
         const dy = pos.y - state.dragStart.mouseY;
 
         state.dragStart.origins.forEach(origin => {
+            if (origin.isTextbox) {
+                const tb = findTextBox(origin.id);
+                if (!tb) return;
+                tb.x = snapToGrid(origin.x + dx);
+                tb.y = snapToGrid(origin.y + dy);
+                const el = textboxesLayer.querySelector(`[data-textbox-id="${origin.id}"]`);
+                if (el) el.setAttribute('transform', `translate(${tb.x}, ${tb.y})`);
+                return;
+            }
             const dev = findDevice(origin.id);
             if (!dev) return;
             dev.x = snapToGrid(origin.x + dx);
@@ -992,6 +1338,11 @@
         connectionsLayer.querySelectorAll('.connection-line').forEach(line => {
             line.classList.toggle('selected', line.dataset.connectionId === state.selectedConnectionId);
         });
+
+        // Text boxes
+        textboxesLayer.querySelectorAll('.canvas-textbox').forEach(g => {
+            g.classList.toggle('selected', g.dataset.textboxId === state.selectedTextboxId);
+        });
     }
 
     // ======================== CONNECTION SYSTEM ========================
@@ -1050,6 +1401,7 @@
 
         state.connections.push(conn);
         renderConnectionLine(conn);
+        rerenderAllConnectionPaths(); // recalc lanes for all siblings
         rebuildConnectionTable();
         refreshPortStates();
         updateStatusBar();
@@ -1072,6 +1424,7 @@
 
         if (state.selectedConnectionId === connId) state.selectedConnectionId = null;
 
+        rerenderAllConnectionPaths(); // recalc lanes for remaining siblings
         rebuildConnectionTable();
         refreshPortStates();
         updateStatusBar();
@@ -1106,8 +1459,8 @@
         const tgtPos = getPortWorldPosition(tgtDev, conn.targetPortId);
         if (!srcPos || !tgtPos) return;
 
-        const laneIndex = getConnectionLaneIndex(conn);
-        const d = calculateConnectionPath(srcPos, tgtPos, srcDev, tgtDev, laneIndex);
+        const { pairLane, wideLane, groupBounds } = getConnectionLaneInfo(conn);
+        const d = calculateConnectionPath(srcPos, tgtPos, srcDev, tgtDev, pairLane, wideLane, groupBounds);
 
         // Connection group
         const connGroup = document.createElementNS(NS, 'g');
@@ -1152,31 +1505,77 @@
         connectionsLayer.appendChild(connGroup);
     }
 
-    // Calculate lane index so parallel connections between same device pair spread out
-    function getConnectionLaneIndex(conn) {
-        const pairKey1 = conn.sourceDeviceId + ':' + conn.targetDeviceId;
-        const pairKey2 = conn.targetDeviceId + ':' + conn.sourceDeviceId;
+    // Recalculate and update all connection paths (used after add/delete to fix lane assignments)
+    function rerenderAllConnectionPaths() {
+        state.connections.forEach(conn => {
+            const srcDev = findDevice(conn.sourceDeviceId);
+            const tgtDev = findDevice(conn.targetDeviceId);
+            if (!srcDev || !tgtDev) return;
+            const srcPos = getPortWorldPosition(srcDev, conn.sourcePortId);
+            const tgtPos = getPortWorldPosition(tgtDev, conn.targetPortId);
+            if (!srcPos || !tgtPos) return;
 
-        // Find all connections between same two devices
-        const siblings = state.connections.filter(c => {
-            const k1 = c.sourceDeviceId + ':' + c.targetDeviceId;
-            const k2 = c.targetDeviceId + ':' + c.sourceDeviceId;
-            return k1 === pairKey1 || k1 === pairKey2 || k2 === pairKey1 || k2 === pairKey2;
+            const { pairLane, wideLane, groupBounds } = getConnectionLaneInfo(conn);
+            const d = calculateConnectionPath(srcPos, tgtPos, srcDev, tgtDev, pairLane, wideLane, groupBounds);
+
+            const connGroup = connectionsLayer.querySelector(`.connection-group[data-connection-id="${conn.connectionId}"]`);
+            if (connGroup) {
+                const pathEl = connGroup.querySelector('.connection-line');
+                const shadowEl = connGroup.querySelector('.connection-shadow');
+                if (pathEl) pathEl.setAttribute('d', d);
+                if (shadowEl) shadowEl.setAttribute('d', d);
+            }
         });
-
-        const idx = siblings.findIndex(c => c.connectionId === conn.connectionId);
-        const total = siblings.length;
-        // Center the lanes: -1, 0, 1 for 3 connections etc
-        return idx - Math.floor(total / 2);
     }
 
-    function calculateConnectionPath(src, tgt, srcDev, tgtDev, laneIndex) {
+    // Calculate lane indices for parallel connections
+    function getConnectionLaneInfo(conn) {
+        // Pair-based: only connections between the exact same two devices
+        const pairKey = [conn.sourceDeviceId, conn.targetDeviceId].sort().join('|');
+        const pairSiblings = state.connections.filter(c => {
+            const k = [c.sourceDeviceId, c.targetDeviceId].sort().join('|');
+            return k === pairKey;
+        });
+        const pairIdx = pairSiblings.findIndex(c => c.connectionId === conn.connectionId);
+        const pairTotal = pairSiblings.length;
+        const pairLane = pairIdx - Math.floor(pairTotal / 2);
+
+        // Wide-based: all connections sharing any device (for side routing Case 3)
+        const wideSiblings = state.connections.filter(c =>
+            c.sourceDeviceId === conn.sourceDeviceId ||
+            c.targetDeviceId === conn.sourceDeviceId ||
+            c.sourceDeviceId === conn.targetDeviceId ||
+            c.targetDeviceId === conn.targetDeviceId
+        );
+        const wideIdx = wideSiblings.findIndex(c => c.connectionId === conn.connectionId);
+        const wideTotal = wideSiblings.length;
+        const wideLane = wideIdx;  // 0-based (not centered) so offsets always push away from devices
+
+        // Group bounds from all wide siblings for side routing
+        const deviceIds = new Set();
+        wideSiblings.forEach(c => {
+            deviceIds.add(c.sourceDeviceId);
+            deviceIds.add(c.targetDeviceId);
+        });
+
+        let left = Infinity, right = -Infinity;
+        deviceIds.forEach(id => {
+            const dev = findDevice(id);
+            if (!dev) return;
+            left = Math.min(left, dev.x);
+            right = Math.max(right, dev.x + (dev._width || 200));
+        });
+
+        return { pairLane, wideLane, groupBounds: { left, right } };
+    }
+
+    function calculateConnectionPath(src, tgt, srcDev, tgtDev, pairLane, wideLane, groupBounds) {
         const STUB = 30;
         const MARGIN = 25;
         const LANE_SPACING = 14;
         const BEND_R = 8;
 
-        const laneOffset = (laneIndex || 0) * LANE_SPACING;
+        const pairOffset = (pairLane || 0) * LANE_SPACING;
 
         // Get device bounding boxes
         const srcRight = srcDev.x + (srcDev._width || 200);
@@ -1188,10 +1587,10 @@
         const srcExit = { x: src.x, y: src.y + STUB };
         const tgtExit = { x: tgt.x, y: tgt.y + STUB };
 
-        // If devices are roughly on the same horizontal line
+        // Case 1: devices roughly on the same horizontal line - use pairLane
         const vertDist = Math.abs(src.y - tgt.y);
         if (vertDist < 30) {
-            const midY = Math.max(srcExit.y, tgtExit.y) + MARGIN + Math.abs(laneOffset);
+            const midY = Math.max(srcExit.y, tgtExit.y) + MARGIN + Math.abs(pairOffset);
             return buildOrthogonalPath([
                 src, { x: src.x, y: midY }, { x: tgt.x, y: midY }, tgt
             ], BEND_R);
@@ -1202,29 +1601,31 @@
         const overlapRight = Math.min(srcRight, tgtRight);
         const hasOverlap = overlapLeft < overlapRight;
 
+        // Case 2: no overlap - route through gap - use pairLane
         if (!hasOverlap) {
-            // No overlap - route through gap
             const topBottom = Math.min(srcBottom, tgtBottom);
             const botTop = Math.max(srcDev.y, tgtDev.y);
-            const midY = (topBottom + botTop) / 2 + laneOffset;
+            const midY = (topBottom + botTop) / 2 + pairOffset;
             return buildOrthogonalPath([
                 src, { x: src.x, y: midY }, { x: tgt.x, y: midY }, tgt
             ], BEND_R);
         }
 
-        // Devices overlap horizontally - route to the side
-        const allLeft = Math.min(srcDev.x, tgtDev.x);
-        const allRight = Math.max(srcRight, tgtRight);
+        // Case 3: devices overlap horizontally - route to the side - use wideLane
+        // Use group bounds so all connections sharing a device share the same reference edge
+        const allLeft = groupBounds ? groupBounds.left : Math.min(srcDev.x, tgtDev.x);
+        const allRight = groupBounds ? groupBounds.right : Math.max(srcRight, tgtRight);
 
         const portAvgX = (src.x + tgt.x) / 2;
         const distToLeft = portAvgX - allLeft;
         const distToRight = allRight - portAvgX;
 
         let sideX;
+        const sideSpacing = (wideLane || 0) * LANE_SPACING;
         if (distToRight <= distToLeft) {
-            sideX = allRight + MARGIN + laneOffset;
+            sideX = allRight + MARGIN + sideSpacing;
         } else {
-            sideX = allLeft - MARGIN + laneOffset;
+            sideX = allLeft - MARGIN - sideSpacing;
         }
 
         return buildOrthogonalPath([
@@ -1315,8 +1716,8 @@
             const tgtPos = getPortWorldPosition(tgtDev, conn.targetPortId);
             if (!srcPos || !tgtPos) return;
 
-            const laneIndex = getConnectionLaneIndex(conn);
-            const d = calculateConnectionPath(srcPos, tgtPos, srcDev, tgtDev, laneIndex);
+            const { pairLane, wideLane, groupBounds } = getConnectionLaneInfo(conn);
+            const d = calculateConnectionPath(srcPos, tgtPos, srcDev, tgtDev, pairLane, wideLane, groupBounds);
 
             const connGroup = connectionsLayer.querySelector(`.connection-group[data-connection-id="${conn.connectionId}"]`);
             if (connGroup) {
@@ -1582,6 +1983,13 @@
                 lineColor: c.lineColor,
                 label: c.label
             })),
+            textboxes: state.textboxes.map(tb => ({
+                textboxId: tb.textboxId,
+                text: tb.text,
+                x: tb.x,
+                y: tb.y,
+                fontSize: tb.fontSize
+            })),
             nextId: state.nextId
         });
     }
@@ -1592,12 +2000,15 @@
         // Clear canvas
         devicesLayer.innerHTML = '';
         connectionsLayer.innerHTML = '';
+        textboxesLayer.innerHTML = '';
 
         state.devices = [];
         state.connections = [];
+        state.textboxes = [];
         state.nextId = data.nextId || 1;
         state.selectedDeviceIds.clear();
         state.selectedConnectionId = null;
+        state.selectedTextboxId = null;
 
         // Restore devices
         data.devices.forEach(d => {
@@ -1616,9 +2027,10 @@
             if (svgEl) devicesLayer.appendChild(svgEl);
         });
 
-        // Restore connections
+        // Restore connections - push all to state first, then render
+        // (lane calculation needs the complete list to assign correct offsets)
         data.connections.forEach(c => {
-            const conn = {
+            state.connections.push({
                 connectionId: c.connectionId,
                 sourceDeviceId: c.sourceDeviceId,
                 sourcePortId: c.sourcePortId,
@@ -1626,9 +2038,22 @@
                 targetPortId: c.targetPortId,
                 lineColor: c.lineColor || '#0099CC',
                 label: c.label || ''
+            });
+        });
+        state.connections.forEach(conn => renderConnectionLine(conn));
+
+        // Restore text boxes
+        (data.textboxes || []).forEach(tb => {
+            const textbox = {
+                textboxId: tb.textboxId,
+                text: tb.text,
+                x: tb.x,
+                y: tb.y,
+                fontSize: tb.fontSize || 14
             };
-            state.connections.push(conn);
-            renderConnectionLine(conn);
+            state.textboxes.push(textbox);
+            const svgEl = renderTextBoxSVG(textbox);
+            if (svgEl) textboxesLayer.appendChild(svgEl);
         });
 
         refreshPortStates();
@@ -1793,6 +2218,12 @@
             .device-selection-rect { fill: transparent; stroke: transparent; }
             .selection-rect { display: none; }
             .canvas-device.selected .device-body { stroke: transparent; stroke-dasharray: none; }
+            .canvas-textbox { cursor: default; }
+            .canvas-textbox .textbox-bg { stroke: #30363d; stroke-dasharray: 4,2; }
+            .canvas-textbox.selected .textbox-bg { stroke: #30363d; stroke-dasharray: 4,2; }
+            .canvas-textbox text { fill: ${resolveVar('--text-primary')}; }
+            .cloud-body { transition: none; }
+            .canvas-device.selected .cloud-body { stroke: #4488aa; stroke-dasharray: none; }
         `;
 
         const svgClone = svg.cloneNode(true);
@@ -1803,6 +2234,7 @@
         const selLayer = svgClone.querySelector('#selection-layer');
         if (selLayer) selLayer.innerHTML = '';
         svgClone.querySelectorAll('.canvas-device.selected').forEach(el => el.classList.remove('selected'));
+        svgClone.querySelectorAll('.canvas-textbox.selected').forEach(el => el.classList.remove('selected'));
 
         const styleEl = document.createElementNS(NS, 'style');
         styleEl.textContent = embeddedCSS;
@@ -2179,12 +2611,22 @@
         state.devices.forEach(dev => {
             const catalog = getDeviceCatalogEntry(dev.modelId);
             if (!catalog) return;
-            const w = calculateDeviceWidth(catalog);
-            const h = LABEL_HEIGHT + 56 + 20; // bodyHeight + portLabelHeight
+            const w = dev._width || calculateDeviceWidth(catalog);
+            const h = dev._height || (LABEL_HEIGHT + 56 + 20);
             minX = Math.min(minX, dev.x);
             minY = Math.min(minY, dev.y);
             maxX = Math.max(maxX, dev.x + w);
             maxY = Math.max(maxY, dev.y + h);
+        });
+
+        // Include text boxes
+        state.textboxes.forEach(tb => {
+            const w = tb._width || 100;
+            const h = tb._height || 30;
+            minX = Math.min(minX, tb.x);
+            minY = Math.min(minY, tb.y);
+            maxX = Math.max(maxX, tb.x + w);
+            maxY = Math.max(maxY, tb.y + h);
         });
 
         // Include connection paths
@@ -2206,15 +2648,18 @@
 
     // ======================== CLEAR ========================
     function clearCanvas() {
-        if (state.devices.length === 0) return;
-        if (!confirm('Clear all devices and connections?')) return;
+        if (state.devices.length === 0 && state.textboxes.length === 0) return;
+        if (!confirm('Clear all devices, connections, and text boxes?')) return;
         pushUndo();
         devicesLayer.innerHTML = '';
         connectionsLayer.innerHTML = '';
+        textboxesLayer.innerHTML = '';
         state.devices = [];
         state.connections = [];
+        state.textboxes = [];
         state.selectedDeviceIds.clear();
         state.selectedConnectionId = null;
+        state.selectedTextboxId = null;
         rebuildConnectionTable();
         updateStatusBar();
         autoSave();
@@ -2237,11 +2682,16 @@
                 case 'backspace':
                     deleteSelectedDevices();
                     break;
+                case 't':
+                    if (!e.ctrlKey && !e.metaKey) setTool('text');
+                    break;
                 case 'escape':
                     cancelPendingConnection();
                     state.selectedDeviceIds.clear();
                     state.selectedConnectionId = null;
+                    state.selectedTextboxId = null;
                     updateSelectionVisuals();
+                    setTool('select');
                     break;
                 case 'z':
                     if (e.ctrlKey || e.metaKey) {
@@ -2306,6 +2756,7 @@
             e.preventDefault();
             const deviceGroup = e.target.closest('.canvas-device');
             const connGroup = e.target.closest('.connection-group');
+            const textboxGroup = e.target.closest('.canvas-textbox');
 
             if (deviceGroup) {
                 const instanceId = deviceGroup.dataset.instanceId;
@@ -2318,6 +2769,15 @@
                     { label: 'Duplicate', action: () => duplicateDevice(instanceId) },
                     null,
                     { label: 'Delete', action: () => deleteDevice(instanceId) },
+                ]);
+            } else if (textboxGroup) {
+                const tbId = textboxGroup.dataset.textboxId;
+                state.selectedTextboxId = tbId;
+                updateSelectionVisuals();
+                showContextMenu(e.clientX, e.clientY, [
+                    { label: 'Edit Text', action: () => startTextEdit(findTextBox(tbId)) },
+                    null,
+                    { label: 'Delete', action: () => deleteTextBox(tbId) },
                 ]);
             } else if (connGroup) {
                 const connId = connGroup.dataset.connectionId;
@@ -2452,11 +2912,16 @@
     function rerenderAll() {
         devicesLayer.innerHTML = '';
         connectionsLayer.innerHTML = '';
+        textboxesLayer.innerHTML = '';
         state.devices.forEach(d => {
             const svgEl = renderDeviceSVG(d);
             if (svgEl) devicesLayer.appendChild(svgEl);
         });
         state.connections.forEach(c => renderConnectionLine(c));
+        state.textboxes.forEach(tb => {
+            const svgEl = renderTextBoxSVG(tb);
+            if (svgEl) textboxesLayer.appendChild(svgEl);
+        });
         refreshPortStates();
         rebuildConnectionTable();
         updateStatusBar();

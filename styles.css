@@ -268,6 +268,7 @@ body {
 #canvas.tool-select { cursor: default; }
 #canvas.tool-connect { cursor: crosshair; }
 #canvas.tool-delete { cursor: not-allowed; }
+#canvas.tool-text { cursor: text; }
 #canvas.tool-pan, #canvas.panning { cursor: grab; }
 #canvas.dragging-device { cursor: move; }
 
@@ -718,4 +719,24 @@ body {
 /* ===== LOGO BUTTON ===== */
 #logo-btn-text {
     white-space: nowrap;
+}
+
+/* ===== CLOUD (Internet) DEVICE ===== */
+.cloud-body {
+    transition: stroke 0.15s;
+}
+.canvas-device:hover .cloud-body { stroke: #0099CC; stroke-opacity: 0.7; }
+.canvas-device.selected .cloud-body { stroke: #0099CC; stroke-width: 2.5; stroke-dasharray: 6,3; }
+
+/* ===== TEXT BOX ===== */
+.canvas-textbox { cursor: move; }
+.canvas-textbox .textbox-bg {
+    transition: stroke 0.15s;
+}
+.canvas-textbox:hover .textbox-bg { stroke: var(--mt-blue); stroke-opacity: 0.5; }
+.canvas-textbox.selected .textbox-bg { stroke: var(--mt-blue); stroke-width: 2; stroke-dasharray: 6,3; }
+.canvas-textbox text {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    fill: var(--text-primary);
+    pointer-events: none;
 }

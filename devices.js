@@ -1039,6 +1039,22 @@ const DEVICE_CATALOG = [
     },
 ];
 
+// ==================== UTILITIES ====================
+
+const UTILITY_CATALOG = [
+    {
+        modelId: 'internet-cloud',
+        name: 'Internet',
+        category: 'utilities',
+        subcategory: 'generic',
+        description: 'Internet / WAN cloud',
+        ports: [{ id: 'wan1', type: 'ge', label: 'WAN', group: 'ethernet' }]
+    },
+];
+
+// Merge utilities into DEVICE_CATALOG
+DEVICE_CATALOG.push(...UTILITY_CATALOG);
+
 // ============================================================
 // SIDEBAR CATEGORIES
 // ============================================================
@@ -1064,6 +1080,13 @@ const SIDEBAR_CATEGORIES = [
             { id: 'crs5xx', label: 'CRS 5xx / High-End' },
             { id: 'css', label: 'CSS Series' },
             { id: 'netpower', label: 'netPower / Outdoor' },
+        ]
+    },
+    {
+        id: 'utilities',
+        label: 'Utilities',
+        subcategories: [
+            { id: 'generic', label: 'Generic' },
         ]
     }
 ];
