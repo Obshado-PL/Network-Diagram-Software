@@ -1039,6 +1039,111 @@ const DEVICE_CATALOG = [
     },
 ];
 
+// ==================== ACCESS POINTS ====================
+
+const AP_CATALOG = [
+    {
+        modelId: 'cap-ax',
+        name: 'cAP ax',
+        model: 'CAPGi-5HaxD2HaxD',
+        category: 'wireless',
+        subcategory: 'cap',
+        description: 'Wi-Fi 6 ceiling AP, 2x GbE',
+        ports: [...ethPorts(2, 'ge')]
+    },
+    {
+        modelId: 'cap-ac',
+        name: 'cAP ac',
+        model: 'RBcAPGi-5acD2nD',
+        category: 'wireless',
+        subcategory: 'cap',
+        description: 'Wi-Fi 5 ceiling AP, 2x GbE',
+        ports: [...ethPorts(2, 'ge')]
+    },
+    {
+        modelId: 'cap-lite',
+        name: 'cAP lite',
+        model: 'RBcAPL-2nD',
+        category: 'wireless',
+        subcategory: 'cap',
+        description: 'Wi-Fi 4 ceiling AP, 1x FE',
+        ports: [...ethPorts(1, 'fe')]
+    },
+    {
+        modelId: 'cap-xl-ac',
+        name: 'cAP XL ac',
+        model: 'RBcAPGi-5acD2nD-XL',
+        category: 'wireless',
+        subcategory: 'cap',
+        description: 'Wi-Fi 5 high-power ceiling AP, 2x GbE',
+        ports: [...ethPorts(2, 'ge')]
+    },
+    {
+        modelId: 'wap-ax',
+        name: 'wAP ax',
+        model: 'RBwAPGR-5HacD2HnD',
+        category: 'wireless',
+        subcategory: 'wap',
+        description: 'Wi-Fi 6 outdoor AP, 1x GbE',
+        ports: [...ethPorts(1, 'ge')]
+    },
+    {
+        modelId: 'wap-ac',
+        name: 'wAP ac',
+        model: 'RBwAPG-5HacD2HnD',
+        category: 'wireless',
+        subcategory: 'wap',
+        description: 'Wi-Fi 5 outdoor AP, 1x GbE',
+        ports: [...ethPorts(1, 'ge')]
+    },
+    {
+        modelId: 'wap-r-ac',
+        name: 'wAP R ac',
+        model: 'RBwAPGR-5HacD2HnD',
+        category: 'wireless',
+        subcategory: 'wap',
+        description: 'Wi-Fi 5 outdoor AP with LTE, 1x GbE',
+        ports: [...ethPorts(1, 'ge')]
+    },
+    {
+        modelId: 'audience',
+        name: 'Audience',
+        model: 'RBD25G-5HPacQD2HPnD',
+        category: 'wireless',
+        subcategory: 'other-ap',
+        description: 'Tri-band mesh AP, 2x GbE',
+        ports: [...ethPorts(2, 'ge')]
+    },
+    {
+        modelId: 'cube-60pro-ac',
+        name: 'Cube 60Pro ac',
+        model: 'CubeG-5ac60adpair',
+        category: 'wireless',
+        subcategory: 'other-ap',
+        description: '60GHz + 5GHz failover PtP, 1x GbE',
+        ports: [...ethPorts(1, 'ge')]
+    },
+    {
+        modelId: 'generic-ap',
+        name: 'Access Point',
+        category: 'wireless',
+        subcategory: 'other-ap',
+        description: 'Generic MikroTik wireless access point',
+        ports: [...ethPorts(1, 'ge')]
+    },
+    {
+        modelId: 'generic-ap-other',
+        name: 'Access Point',
+        brand: 'generic',
+        category: 'wireless',
+        subcategory: 'other-ap',
+        description: 'Generic non-MikroTik wireless access point',
+        ports: [...ethPorts(1, 'ge')]
+    },
+];
+
+DEVICE_CATALOG.push(...AP_CATALOG);
+
 // ==================== UTILITIES ====================
 
 const UTILITY_CATALOG = [
@@ -1080,6 +1185,15 @@ const SIDEBAR_CATEGORIES = [
             { id: 'crs5xx', label: 'CRS 5xx / High-End' },
             { id: 'css', label: 'CSS Series' },
             { id: 'netpower', label: 'netPower / Outdoor' },
+        ]
+    },
+    {
+        id: 'wireless',
+        label: 'Wireless / APs',
+        subcategories: [
+            { id: 'cap', label: 'cAP Series' },
+            { id: 'wap', label: 'wAP Series' },
+            { id: 'other-ap', label: 'Other APs' },
         ]
     },
     {

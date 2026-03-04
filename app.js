@@ -39,6 +39,8 @@
         zoom: 1,
         undoStack: [],
         redoStack: [],
+        isResizing: false,
+        resizeStart: null,
     };
 
     // ======================== DOM REFS ========================
@@ -149,6 +151,14 @@
                 <circle cx="14" cy="9" r="3" fill="none" stroke="#88bbdd" stroke-width="0.6"/>
                 <ellipse cx="14" cy="9" rx="1.5" ry="3" fill="none" stroke="#88bbdd" stroke-width="0.4"/>
                 <line x1="11" y1="9" x2="17" y2="9" stroke="#88bbdd" stroke-width="0.4"/>
+            </svg>`;
+        }
+        if (device.category === 'wireless') {
+            return `<svg viewBox="0 0 28 18" xmlns="${NS}">
+                <circle cx="14" cy="9" r="7" fill="#1a2332" stroke="#AB47BC" stroke-width="1.2"/>
+                <circle cx="14" cy="12" r="1.5" fill="#AB47BC" opacity="0.7"/>
+                <path d="M 10.5,8.5 A 5,5 0 0,1 17.5,8.5" fill="none" stroke="#AB47BC" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+                <path d="M 8.5,6 A 8,8 0 0,1 19.5,6" fill="none" stroke="#AB47BC" stroke-width="1" stroke-linecap="round" opacity="0.4"/>
             </svg>`;
         }
         const isRouter = device.category === 'routers';
@@ -264,10 +274,17 @@
             return renderCloudSVG(instance, catalog);
         }
 
+        // Use circular AP renderer for wireless
+        if (catalog.category === 'wireless') {
+            return renderAPSVG(instance, catalog);
+        }
+
+        const s = instance.scale || 1;
         const bodyWidth = calculateDeviceWidth(catalog);
         const isRouter = catalog.category === 'routers';
-        const accentColor = isRouter ? '#0099CC' : '#4CAF50';
-        const bodyRx = isRouter ? 6 : 3;
+        const isWireless = catalog.category === 'wireless';
+        const accentColor = isRouter ? '#0099CC' : isWireless ? '#AB47BC' : '#4CAF50';
+        const bodyRx = isRouter ? 6 : isWireless ? 8 : 3;
 
         // Layout measurements
         const bodyTop = LABEL_HEIGHT;
@@ -281,6 +298,10 @@
         g.dataset.instanceId = instance.instanceId;
         g.setAttribute('transform', `translate(${instance.x}, ${instance.y})`);
 
+        // Scale wrapper
+        const sg = document.createElementNS(NS, 'g');
+        if (s !== 1) sg.setAttribute('transform', `scale(${s})`);
+
         // Selection rect
         const selRect = document.createElementNS(NS, 'rect');
         selRect.setAttribute('x', -4);
@@ -292,10 +313,9 @@
         selRect.setAttribute('stroke', 'transparent');
         selRect.setAttribute('stroke-width', 2);
         selRect.classList.add('device-selection-rect');
-        g.appendChild(selRect);
+        sg.appendChild(selRect);
 
         // ---- DEVICE BODY ----
-        // Main body with subtle gradient effect (two overlapping rects)
         const bodyBg = document.createElementNS(NS, 'rect');
         bodyBg.setAttribute('x', 0);
         bodyBg.setAttribute('y', bodyTop);
@@ -306,9 +326,9 @@
         bodyBg.setAttribute('stroke', '#30363d');
         bodyBg.setAttribute('stroke-width', 1.5);
         bodyBg.classList.add('device-body');
-        g.appendChild(bodyBg);
+        sg.appendChild(bodyBg);
 
-        // Inner panel (slightly inset, lighter)
+        // Inner panel
         const innerPanel = document.createElementNS(NS, 'rect');
         innerPanel.setAttribute('x', 3);
         innerPanel.setAttribute('y', bodyTop + 9);
@@ -319,9 +339,9 @@
         innerPanel.setAttribute('stroke', '#262a3d');
         innerPanel.setAttribute('stroke-width', 0.5);
         innerPanel.setAttribute('pointer-events', 'none');
-        g.appendChild(innerPanel);
+        sg.appendChild(innerPanel);
 
-        // Top accent bar (thick, with rounded top corners)
+        // Top accent bar
         const accentBar = document.createElementNS(NS, 'rect');
         accentBar.setAttribute('x', 0);
         accentBar.setAttribute('y', bodyTop);
@@ -330,8 +350,7 @@
         accentBar.setAttribute('rx', bodyRx);
         accentBar.setAttribute('fill', accentColor);
         accentBar.setAttribute('pointer-events', 'none');
-        g.appendChild(accentBar);
-        // Square off bottom of accent bar
+        sg.appendChild(accentBar);
         const accentSquare = document.createElementNS(NS, 'rect');
         accentSquare.setAttribute('x', 0);
         accentSquare.setAttribute('y', bodyTop + 4);
@@ -339,10 +358,10 @@
         accentSquare.setAttribute('height', 3);
         accentSquare.setAttribute('fill', accentColor);
         accentSquare.setAttribute('pointer-events', 'none');
-        g.appendChild(accentSquare);
+        sg.appendChild(accentSquare);
 
-        // ---- BRANDING: centered MikroTik logo text in the body ----
-        const brandY = bodyTop + 18; // right below accent bar, above port area
+        // ---- BRANDING ----
+        const brandY = bodyTop + 18;
         const brand = document.createElementNS(NS, 'text');
         brand.setAttribute('x', bodyWidth / 2);
         brand.setAttribute('y', brandY);
@@ -355,9 +374,9 @@
         brand.setAttribute('pointer-events', 'none');
         brand.setAttribute('letter-spacing', '1.5');
         brand.textContent = 'MikroTik';
-        g.appendChild(brand);
+        sg.appendChild(brand);
 
-        // Decorative status LEDs (top-right of body)
+        // Decorative status LEDs
         const ledColors = ['#4CAF50', '#FF9800'];
         ledColors.forEach((c, i) => {
             const led = document.createElementNS(NS, 'circle');
@@ -367,14 +386,13 @@
             led.setAttribute('fill', c);
             led.setAttribute('opacity', '0.4');
             led.setAttribute('pointer-events', 'none');
-            g.appendChild(led);
+            sg.appendChild(led);
         });
 
-        // Category icon (small, top-left of body next to accent bar)
+        // Category icon
         const iconX = 12;
         const iconY = bodyTop + 14;
         if (isRouter) {
-            // Small router icon: circle with crosshair
             const ic = document.createElementNS(NS, 'circle');
             ic.setAttribute('cx', iconX); ic.setAttribute('cy', iconY);
             ic.setAttribute('r', 4);
@@ -383,7 +401,7 @@
             ic.setAttribute('stroke-width', 0.8);
             ic.setAttribute('opacity', '0.4');
             ic.setAttribute('pointer-events', 'none');
-            g.appendChild(ic);
+            sg.appendChild(ic);
             const cross = document.createElementNS(NS, 'path');
             cross.setAttribute('d', `M${iconX},${iconY - 3}v6 M${iconX - 3},${iconY}h6`);
             cross.setAttribute('stroke', accentColor);
@@ -391,9 +409,29 @@
             cross.setAttribute('opacity', '0.3');
             cross.setAttribute('fill', 'none');
             cross.setAttribute('pointer-events', 'none');
-            g.appendChild(cross);
+            sg.appendChild(cross);
+        } else if (isWireless) {
+            const wifiIcon = document.createElementNS(NS, 'g');
+            wifiIcon.setAttribute('opacity', '0.4');
+            wifiIcon.setAttribute('pointer-events', 'none');
+            const dot = document.createElementNS(NS, 'circle');
+            dot.setAttribute('cx', iconX); dot.setAttribute('cy', iconY + 2);
+            dot.setAttribute('r', 1.2);
+            dot.setAttribute('fill', accentColor);
+            wifiIcon.appendChild(dot);
+            [3, 5.5, 8].forEach(r => {
+                const arc = document.createElementNS(NS, 'path');
+                const x1 = iconX - r * 0.7;
+                const y1 = iconY + 2 - r * 0.7;
+                const x2 = iconX + r * 0.7;
+                arc.setAttribute('d', `M ${x1},${y1} A ${r},${r} 0 0,1 ${x2},${y1}`);
+                arc.setAttribute('fill', 'none');
+                arc.setAttribute('stroke', accentColor);
+                arc.setAttribute('stroke-width', 0.8);
+                wifiIcon.appendChild(arc);
+            });
+            sg.appendChild(wifiIcon);
         } else {
-            // Small switch icon: two stacked lines
             for (let i = 0; i < 2; i++) {
                 const row = document.createElementNS(NS, 'rect');
                 row.setAttribute('x', iconX - 4);
@@ -406,7 +444,7 @@
                 row.setAttribute('stroke-width', 0.7);
                 row.setAttribute('opacity', '0.4');
                 row.setAttribute('pointer-events', 'none');
-                g.appendChild(row);
+                sg.appendChild(row);
             }
         }
 
@@ -416,9 +454,9 @@
         label.setAttribute('y', LABEL_HEIGHT - 6);
         label.classList.add('device-label-text');
         label.textContent = instance.label;
-        g.appendChild(label);
+        sg.appendChild(label);
 
-        // ---- PORTS (inside body, near bottom edge) ----
+        // ---- PORTS ----
         let portX = BODY_PADDING;
         const groups = groupPortsByGroup(catalog.ports);
         const groupKeys = Object.keys(groups);
@@ -429,7 +467,6 @@
         groupKeys.forEach((key, gi) => {
             const groupPorts = groups[key];
 
-            // Group separator line between port groups (subtle vertical divider)
             if (gi > 0 && groupPorts.length > 0) {
                 const sep = document.createElementNS(NS, 'line');
                 sep.setAttribute('x1', portX - GROUP_GAP / 2);
@@ -439,7 +476,7 @@
                 sep.setAttribute('stroke', '#333');
                 sep.setAttribute('stroke-width', 0.5);
                 sep.setAttribute('pointer-events', 'none');
-                g.appendChild(sep);
+                sg.appendChild(sep);
             }
 
             groupPorts.forEach(port => {
@@ -448,7 +485,6 @@
                 const portCx = portX + pw / 2;
                 const portCy = portAreaTop + PORT_HEIGHT / 2;
 
-                // Port background (filled slot)
                 const portSlot = document.createElementNS(NS, 'rect');
                 portSlot.setAttribute('x', portX);
                 portSlot.setAttribute('y', portAreaTop);
@@ -467,9 +503,8 @@
                     (c.targetDeviceId === instance.instanceId && c.targetPortId === port.id)
                 );
                 if (isConnected) portSlot.classList.add('connected');
-                g.appendChild(portSlot);
+                sg.appendChild(portSlot);
 
-                // Inner detail: small filled indicator inside the port
                 const indicator = document.createElementNS(NS, 'rect');
                 indicator.setAttribute('x', portX + 2);
                 indicator.setAttribute('y', portAreaTop + 2);
@@ -479,9 +514,8 @@
                 indicator.setAttribute('fill', color);
                 indicator.setAttribute('opacity', isConnected ? '0.5' : '0.15');
                 indicator.setAttribute('pointer-events', 'none');
-                g.appendChild(indicator);
+                sg.appendChild(indicator);
 
-                // Port highlight ring
                 const highlight = document.createElementNS(NS, 'rect');
                 highlight.setAttribute('x', portX - 1);
                 highlight.setAttribute('y', portAreaTop - 1);
@@ -489,9 +523,8 @@
                 highlight.setAttribute('height', PORT_HEIGHT + 2);
                 highlight.setAttribute('rx', 3);
                 highlight.classList.add('port-highlight');
-                g.appendChild(highlight);
+                sg.appendChild(highlight);
 
-                // Hitbox
                 const hitbox = document.createElementNS(NS, 'rect');
                 hitbox.setAttribute('x', portX - 2);
                 hitbox.setAttribute('y', portAreaTop - 4);
@@ -502,9 +535,8 @@
                 hitbox.classList.add('port-hitbox');
                 hitbox.dataset.instanceId = instance.instanceId;
                 hitbox.dataset.portId = port.id;
-                g.appendChild(hitbox);
+                sg.appendChild(hitbox);
 
-                // Port number label below the body
                 const pLabel = document.createElementNS(NS, 'text');
                 pLabel.setAttribute('x', portCx);
                 pLabel.setAttribute('y', bodyTop + bodyHeight + 11);
@@ -517,12 +549,12 @@
                 pLabel.setAttribute('pointer-events', 'none');
                 pLabel.classList.add('port-label-text');
                 pLabel.textContent = shortPortLabel(port);
-                g.appendChild(pLabel);
+                sg.appendChild(pLabel);
 
-                // Store position for connection routing (below port labels)
+                // Store position scaled for connection routing
                 instance._portPositions[port.id] = {
-                    localX: portCx,
-                    localY: totalHeight
+                    localX: portCx * s,
+                    localY: totalHeight * s
                 };
 
                 portX += pw + PORT_GAP;
@@ -531,19 +563,21 @@
             if (gi < groupKeys.length - 1) portX += GROUP_GAP;
         });
 
-        // Store device dimensions
-        instance._width = bodyWidth;
-        instance._height = totalHeight;
+        // Store scaled device dimensions
+        instance._width = bodyWidth * s;
+        instance._height = totalHeight * s;
 
+        g.appendChild(sg);
         return g;
     }
 
     // ======================== CLOUD (INTERNET) RENDERER ========================
     function renderCloudSVG(instance, catalog) {
+        const s = instance.scale || 1;
         const cloudW = 160;
         const cloudH = 90;
         const labelY = 14;
-        const portLabelH = 20;
+        const portLabelH = 10;
         const totalW = cloudW;
         const totalH = labelY + cloudH + portLabelH;
 
@@ -552,7 +586,9 @@
         g.dataset.instanceId = instance.instanceId;
         g.setAttribute('transform', `translate(${instance.x}, ${instance.y})`);
 
-        // Selection rect
+        const sg = document.createElementNS(NS, 'g');
+        if (s !== 1) sg.setAttribute('transform', `scale(${s})`);
+
         const selRect = document.createElementNS(NS, 'rect');
         selRect.setAttribute('x', -4);
         selRect.setAttribute('y', -4);
@@ -563,9 +599,8 @@
         selRect.setAttribute('stroke', 'transparent');
         selRect.setAttribute('stroke-width', 2);
         selRect.classList.add('device-selection-rect');
-        g.appendChild(selRect);
+        sg.appendChild(selRect);
 
-        // Cloud shape path
         const cx = cloudW / 2;
         const cy = labelY + cloudH / 2;
         const cloud = document.createElementNS(NS, 'path');
@@ -582,9 +617,8 @@
         cloud.setAttribute('stroke-width', 1.5);
         cloud.classList.add('cloud-body');
         cloud.classList.add('device-body');
-        g.appendChild(cloud);
+        sg.appendChild(cloud);
 
-        // Fixed "Internet" text inside cloud (doesn't change on rename)
         const text = document.createElementNS(NS, 'text');
         text.setAttribute('x', cx);
         text.setAttribute('y', cy + 2);
@@ -595,9 +629,8 @@
         text.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif');
         text.setAttribute('pointer-events', 'none');
         text.textContent = catalog.name;
-        g.appendChild(text);
+        sg.appendChild(text);
 
-        // Globe icon inside cloud (above text)
         const globe = document.createElementNS(NS, 'g');
         globe.setAttribute('pointer-events', 'none');
         globe.setAttribute('opacity', '0.4');
@@ -616,9 +649,8 @@
         gl1.setAttribute('x2', cx + 8); gl1.setAttribute('y2', cy - 18);
         gl1.setAttribute('stroke', '#88bbdd'); gl1.setAttribute('stroke-width', 0.5);
         globe.appendChild(gl1);
-        g.appendChild(globe);
+        sg.appendChild(globe);
 
-        // WAN port at bottom center (inside cloud body, above bottom edge)
         instance._portPositions = {};
         const port = catalog.ports[0];
         const pw = getPortWidth(port.type);
@@ -643,9 +675,8 @@
             (c.targetDeviceId === instance.instanceId && c.targetPortId === port.id)
         );
         if (isConnected) portSlot.classList.add('connected');
-        g.appendChild(portSlot);
+        sg.appendChild(portSlot);
 
-        // Port indicator
         const indicator = document.createElementNS(NS, 'rect');
         indicator.setAttribute('x', portX + 2);
         indicator.setAttribute('y', portY + 2);
@@ -655,9 +686,8 @@
         indicator.setAttribute('fill', color);
         indicator.setAttribute('opacity', isConnected ? '0.5' : '0.15');
         indicator.setAttribute('pointer-events', 'none');
-        g.appendChild(indicator);
+        sg.appendChild(indicator);
 
-        // Port hitbox
         const hitbox = document.createElementNS(NS, 'rect');
         hitbox.setAttribute('x', portX - 2);
         hitbox.setAttribute('y', portY - 4);
@@ -668,12 +698,11 @@
         hitbox.classList.add('port-hitbox');
         hitbox.dataset.instanceId = instance.instanceId;
         hitbox.dataset.portId = port.id;
-        g.appendChild(hitbox);
+        sg.appendChild(hitbox);
 
-        // Port label below cloud
         const pLabel = document.createElementNS(NS, 'text');
         pLabel.setAttribute('x', cx);
-        pLabel.setAttribute('y', labelY + cloudH + 11);
+        pLabel.setAttribute('y', labelY + cloudH + 1);
         pLabel.setAttribute('text-anchor', 'middle');
         pLabel.setAttribute('font-size', '7');
         pLabel.setAttribute('fill', color);
@@ -682,25 +711,240 @@
         pLabel.setAttribute('opacity', '0.7');
         pLabel.setAttribute('pointer-events', 'none');
         pLabel.textContent = port.label;
-        g.appendChild(pLabel);
+        sg.appendChild(pLabel);
 
-        // Device label (above cloud)
         const label = document.createElementNS(NS, 'text');
         label.setAttribute('x', cx);
         label.setAttribute('y', labelY - 6);
         label.classList.add('device-label-text');
         label.textContent = instance.label;
-        g.appendChild(label);
+        sg.appendChild(label);
 
-        // Store port position (below port label area)
         instance._portPositions[port.id] = {
-            localX: cx,
-            localY: totalH
+            localX: cx * s,
+            localY: totalH * s
         };
 
-        instance._width = totalW;
-        instance._height = totalH;
+        instance._width = totalW * s;
+        instance._height = totalH * s;
 
+        g.appendChild(sg);
+        return g;
+    }
+
+    // ======================== ACCESS POINT (CIRCULAR) RENDERER ========================
+    const AP_RADIUS = 32;
+
+    function renderAPSVG(instance, catalog) {
+        const s = instance.scale || 1;
+        const accentColor = '#AB47BC';
+
+        const groups = groupPortsByGroup(catalog.ports);
+        const groupKeys = Object.keys(groups);
+        let portsWidth = 0;
+        groupKeys.forEach((key, gi) => {
+            groups[key].forEach(port => {
+                portsWidth += getPortWidth(port.type) + PORT_GAP;
+            });
+            if (gi < groupKeys.length - 1) portsWidth += GROUP_GAP;
+        });
+
+        const totalW = Math.max(AP_RADIUS * 2 + 20, portsWidth + BODY_PADDING * 2);
+        const cx = totalW / 2;
+        const cy = LABEL_HEIGHT + AP_RADIUS;
+        const circleBottom = LABEL_HEIGHT + AP_RADIUS * 2;
+        const portAreaTop = circleBottom + 4;
+        const portLabelH = 16;
+        const totalH = portAreaTop + PORT_HEIGHT + portLabelH;
+
+        const g = document.createElementNS(NS, 'g');
+        g.classList.add('canvas-device');
+        g.dataset.instanceId = instance.instanceId;
+        g.setAttribute('transform', `translate(${instance.x}, ${instance.y})`);
+
+        const sg = document.createElementNS(NS, 'g');
+        if (s !== 1) sg.setAttribute('transform', `scale(${s})`);
+
+        const selRect = document.createElementNS(NS, 'rect');
+        selRect.setAttribute('x', -4);
+        selRect.setAttribute('y', -4);
+        selRect.setAttribute('width', totalW + 8);
+        selRect.setAttribute('height', totalH + 8);
+        selRect.setAttribute('rx', 6);
+        selRect.setAttribute('fill', 'transparent');
+        selRect.setAttribute('stroke', 'transparent');
+        selRect.setAttribute('stroke-width', 2);
+        selRect.classList.add('device-selection-rect');
+        sg.appendChild(selRect);
+
+        const outerRing = document.createElementNS(NS, 'circle');
+        outerRing.setAttribute('cx', cx);
+        outerRing.setAttribute('cy', cy);
+        outerRing.setAttribute('r', AP_RADIUS + 3);
+        outerRing.setAttribute('fill', 'none');
+        outerRing.setAttribute('stroke', accentColor);
+        outerRing.setAttribute('stroke-width', 1);
+        outerRing.setAttribute('opacity', '0.25');
+        outerRing.setAttribute('pointer-events', 'none');
+        sg.appendChild(outerRing);
+
+        const body = document.createElementNS(NS, 'circle');
+        body.setAttribute('cx', cx);
+        body.setAttribute('cy', cy);
+        body.setAttribute('r', AP_RADIUS);
+        body.setAttribute('fill', '#1a2332');
+        body.setAttribute('stroke', accentColor);
+        body.setAttribute('stroke-width', 2);
+        body.classList.add('device-body');
+        sg.appendChild(body);
+
+        const innerRing = document.createElementNS(NS, 'circle');
+        innerRing.setAttribute('cx', cx);
+        innerRing.setAttribute('cy', cy);
+        innerRing.setAttribute('r', AP_RADIUS - 5);
+        innerRing.setAttribute('fill', 'none');
+        innerRing.setAttribute('stroke', accentColor);
+        innerRing.setAttribute('stroke-width', 0.5);
+        innerRing.setAttribute('opacity', '0.15');
+        innerRing.setAttribute('pointer-events', 'none');
+        sg.appendChild(innerRing);
+
+        const wifiG = document.createElementNS(NS, 'g');
+        wifiG.setAttribute('pointer-events', 'none');
+        const dot = document.createElementNS(NS, 'circle');
+        dot.setAttribute('cx', cx);
+        dot.setAttribute('cy', cy + 4);
+        dot.setAttribute('r', 2.5);
+        dot.setAttribute('fill', accentColor);
+        dot.setAttribute('opacity', '0.7');
+        wifiG.appendChild(dot);
+        [8, 14, 20].forEach(r => {
+            const arc = document.createElementNS(NS, 'path');
+            const x1 = cx - r * 0.7;
+            const y1 = cy + 4 - r * 0.7;
+            const x2 = cx + r * 0.7;
+            arc.setAttribute('d', `M ${x1},${y1} A ${r},${r} 0 0,1 ${x2},${y1}`);
+            arc.setAttribute('fill', 'none');
+            arc.setAttribute('stroke', accentColor);
+            arc.setAttribute('stroke-width', 1.5);
+            arc.setAttribute('stroke-linecap', 'round');
+            arc.setAttribute('opacity', '0.5');
+            wifiG.appendChild(arc);
+        });
+        sg.appendChild(wifiG);
+
+        if (!catalog.brand || catalog.brand === 'mikrotik') {
+            const brand = document.createElementNS(NS, 'text');
+            brand.setAttribute('x', cx);
+            brand.setAttribute('y', cy + AP_RADIUS - 8);
+            brand.setAttribute('text-anchor', 'middle');
+            brand.setAttribute('font-size', '6');
+            brand.setAttribute('fill', accentColor);
+            brand.setAttribute('font-weight', '600');
+            brand.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif');
+            brand.setAttribute('opacity', '0.35');
+            brand.setAttribute('pointer-events', 'none');
+            brand.setAttribute('letter-spacing', '1');
+            brand.textContent = 'MikroTik';
+            sg.appendChild(brand);
+        }
+
+        const led = document.createElementNS(NS, 'circle');
+        led.setAttribute('cx', cx + AP_RADIUS - 10);
+        led.setAttribute('cy', cy - AP_RADIUS + 10);
+        led.setAttribute('r', 2);
+        led.setAttribute('fill', '#4CAF50');
+        led.setAttribute('opacity', '0.4');
+        led.setAttribute('pointer-events', 'none');
+        sg.appendChild(led);
+
+        const label = document.createElementNS(NS, 'text');
+        label.setAttribute('x', cx);
+        label.setAttribute('y', LABEL_HEIGHT - 6);
+        label.classList.add('device-label-text');
+        label.textContent = instance.label;
+        sg.appendChild(label);
+
+        instance._portPositions = {};
+        let portX = (totalW - portsWidth) / 2;
+
+        groupKeys.forEach((key, gi) => {
+            groups[key].forEach(port => {
+                const pw = getPortWidth(port.type);
+                const portCx = portX + pw / 2;
+                const color = getPortColor(port.type);
+
+                const isConnected = state.connections.some(c =>
+                    (c.sourceDeviceId === instance.instanceId && c.sourcePortId === port.id) ||
+                    (c.targetDeviceId === instance.instanceId && c.targetPortId === port.id)
+                );
+
+                const portSlot = document.createElementNS(NS, 'rect');
+                portSlot.setAttribute('x', portX);
+                portSlot.setAttribute('y', portAreaTop);
+                portSlot.setAttribute('width', pw);
+                portSlot.setAttribute('height', PORT_HEIGHT);
+                portSlot.setAttribute('rx', 2);
+                portSlot.setAttribute('fill', '#0d1117');
+                portSlot.setAttribute('stroke', color);
+                portSlot.setAttribute('stroke-width', 1.2);
+                portSlot.classList.add('port-shape');
+                portSlot.dataset.instanceId = instance.instanceId;
+                portSlot.dataset.portId = port.id;
+                if (isConnected) portSlot.classList.add('connected');
+                sg.appendChild(portSlot);
+
+                const indicator = document.createElementNS(NS, 'rect');
+                indicator.setAttribute('x', portX + 2);
+                indicator.setAttribute('y', portAreaTop + 2);
+                indicator.setAttribute('width', pw - 4);
+                indicator.setAttribute('height', PORT_HEIGHT - 4);
+                indicator.setAttribute('rx', 1);
+                indicator.setAttribute('fill', color);
+                indicator.setAttribute('opacity', isConnected ? '0.5' : '0.15');
+                indicator.setAttribute('pointer-events', 'none');
+                sg.appendChild(indicator);
+
+                const hitbox = document.createElementNS(NS, 'rect');
+                hitbox.setAttribute('x', portX - 2);
+                hitbox.setAttribute('y', portAreaTop - 4);
+                hitbox.setAttribute('width', pw + 4);
+                hitbox.setAttribute('height', PORT_HEIGHT + 12);
+                hitbox.setAttribute('fill', 'transparent');
+                hitbox.setAttribute('cursor', 'crosshair');
+                hitbox.classList.add('port-hitbox');
+                hitbox.dataset.instanceId = instance.instanceId;
+                hitbox.dataset.portId = port.id;
+                sg.appendChild(hitbox);
+
+                const pLabel = document.createElementNS(NS, 'text');
+                pLabel.setAttribute('x', portCx);
+                pLabel.setAttribute('y', portAreaTop + PORT_HEIGHT + 10);
+                pLabel.setAttribute('text-anchor', 'middle');
+                pLabel.setAttribute('font-size', '7');
+                pLabel.setAttribute('fill', color);
+                pLabel.setAttribute('font-family', 'Consolas, Courier New, monospace');
+                pLabel.setAttribute('font-weight', '600');
+                pLabel.setAttribute('opacity', '0.7');
+                pLabel.setAttribute('pointer-events', 'none');
+                pLabel.classList.add('port-label-text');
+                pLabel.textContent = shortPortLabel(port);
+                sg.appendChild(pLabel);
+
+                instance._portPositions[port.id] = {
+                    localX: portCx * s,
+                    localY: totalH * s
+                };
+
+                portX += pw + PORT_GAP;
+            });
+            if (gi < groupKeys.length - 1) portX += GROUP_GAP;
+        });
+
+        instance._width = totalW * s;
+        instance._height = totalH * s;
+
+        g.appendChild(sg);
         return g;
     }
 
@@ -721,7 +965,8 @@
             text: 'Text',
             x: snapToGrid(x),
             y: snapToGrid(y),
-            fontSize: 14
+            fontSize: 14,
+            scale: 1
         };
         state.textboxes.push(tb);
         const svgEl = renderTextBoxSVG(tb);
@@ -735,12 +980,15 @@
     }
 
     function renderTextBoxSVG(tb) {
+        const s = tb.scale || 1;
         const g = document.createElementNS(NS, 'g');
         g.classList.add('canvas-textbox');
         g.dataset.textboxId = tb.textboxId;
         g.setAttribute('transform', `translate(${tb.x}, ${tb.y})`);
 
-        // Split text into lines
+        const sg = document.createElementNS(NS, 'g');
+        if (s !== 1) sg.setAttribute('transform', `scale(${s})`);
+
         const lines = tb.text.split('\n');
         const lineHeight = tb.fontSize * 1.3;
         const charWidth = tb.fontSize * 0.6;
@@ -748,7 +996,6 @@
         const textW = maxLineLen * charWidth + 16;
         const textH = lines.length * lineHeight + 12;
 
-        // Background rect (subtle, dashed border)
         const bg = document.createElementNS(NS, 'rect');
         bg.setAttribute('x', 0);
         bg.setAttribute('y', 0);
@@ -760,9 +1007,8 @@
         bg.setAttribute('stroke-width', 1);
         bg.setAttribute('stroke-dasharray', '4,2');
         bg.classList.add('textbox-bg');
-        g.appendChild(bg);
+        sg.appendChild(bg);
 
-        // Text lines
         lines.forEach((line, i) => {
             const t = document.createElementNS(NS, 'text');
             t.setAttribute('x', 8);
@@ -771,13 +1017,13 @@
             t.setAttribute('fill', '#e6edf3');
             t.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif');
             t.textContent = line;
-            g.appendChild(t);
+            sg.appendChild(t);
         });
 
-        // Store dimensions for bounds/selection
-        tb._width = textW;
-        tb._height = textH;
+        tb._width = textW * s;
+        tb._height = textH * s;
 
+        g.appendChild(sg);
         return g;
     }
 
@@ -863,6 +1109,13 @@
         }
 
         if (e.button !== 0) return;
+
+        // Check if clicking a resize handle
+        const resizeHandle = e.target.closest('.resize-handle');
+        if (resizeHandle && state.tool === 'select') {
+            startResize(e, pos, resizeHandle);
+            return;
+        }
 
         // Check if clicking a port hitbox
         const portHit = e.target.closest('.port-hitbox');
@@ -970,6 +1223,11 @@
             return;
         }
 
+        if (state.isResizing) {
+            updateResize(pos);
+            return;
+        }
+
         if (state.isDragging) {
             updateDeviceDrag(pos);
             return;
@@ -999,6 +1257,11 @@
     function onCanvasMouseUp(e) {
         if (state.isPanning) {
             endPan();
+            return;
+        }
+
+        if (state.isResizing) {
+            endResize();
             return;
         }
 
@@ -1169,6 +1432,7 @@
             modelId,
             label: catalog.name,
             x, y,
+            scale: 1,
             _portPositions: {},
             _width: 0,
             _height: 0
@@ -1276,6 +1540,99 @@
         autoSave();
     }
 
+    // ======================== RESIZE ========================
+    function startResize(e, pos, handleEl) {
+        const handleId = handleEl.dataset.handle;
+        const elementId = handleEl.dataset.elementId;
+
+        const dev = findDevice(elementId);
+        const tb = dev ? null : findTextBox(elementId);
+        const element = dev || tb;
+        if (!element) return;
+
+        const w = element._width;
+        const h = element._height;
+        const sc = element.scale || 1;
+
+        // Anchor = corner opposite to the one being dragged
+        let anchorX, anchorY;
+        if (handleId === 'se') { anchorX = element.x; anchorY = element.y; }
+        else if (handleId === 'sw') { anchorX = element.x + w; anchorY = element.y; }
+        else if (handleId === 'ne') { anchorX = element.x; anchorY = element.y + h; }
+        else { anchorX = element.x + w; anchorY = element.y + h; }
+
+        pushUndo();
+        state.isResizing = true;
+        state.resizeStart = {
+            handle: handleId,
+            elementId,
+            isTextbox: !!tb,
+            origScale: sc,
+            origX: element.x,
+            origY: element.y,
+            origW: w,
+            origH: h,
+            anchorX, anchorY,
+        };
+        // Hide handles during resize
+        selectionLayer.querySelectorAll('.resize-handle').forEach(h => h.remove());
+    }
+
+    function updateResize(pos) {
+        const rs = state.resizeStart;
+        if (!rs) return;
+        const element = rs.isTextbox ? findTextBox(rs.elementId) : findDevice(rs.elementId);
+        if (!element) return;
+
+        // Distance from anchor to original dragged corner
+        const origDist = Math.sqrt(rs.origW * rs.origW + rs.origH * rs.origH);
+
+        // Distance from anchor to current mouse
+        const dx = pos.x - rs.anchorX;
+        const dy = pos.y - rs.anchorY;
+        const curDist = Math.sqrt(dx * dx + dy * dy);
+
+        const ratio = curDist / origDist;
+        const newScale = Math.max(0.3, Math.min(3.0, rs.origScale * ratio));
+        element.scale = newScale;
+
+        // Base (unscaled) dimensions
+        const baseW = rs.origW / rs.origScale;
+        const baseH = rs.origH / rs.origScale;
+        const newW = baseW * newScale;
+        const newH = baseH * newScale;
+
+        // Reposition so anchor corner stays fixed
+        if (rs.handle === 'se') {
+            element.x = rs.anchorX;
+            element.y = rs.anchorY;
+        } else if (rs.handle === 'sw') {
+            element.x = rs.anchorX - newW;
+            element.y = rs.anchorY;
+        } else if (rs.handle === 'ne') {
+            element.x = rs.anchorX;
+            element.y = rs.anchorY - newH;
+        } else {
+            element.x = rs.anchorX - newW;
+            element.y = rs.anchorY - newH;
+        }
+
+        // Re-render
+        if (rs.isTextbox) {
+            rerenderTextBox(element);
+        } else {
+            rerenderDevice(element);
+            updateConnectionsForDevice(rs.elementId);
+        }
+    }
+
+    function endResize() {
+        state.isResizing = false;
+        state.resizeStart = null;
+        updateSelectionVisuals();
+        autoSave();
+    }
+
     // ======================== SELECTION RECT ========================
     function startSelectionRect(pos) {
         state.isSelecting = true;
@@ -1342,6 +1699,52 @@
         // Text boxes
         textboxesLayer.querySelectorAll('.canvas-textbox').forEach(g => {
             g.classList.toggle('selected', g.dataset.textboxId === state.selectedTextboxId);
+        });
+
+        // Resize handles
+        selectionLayer.querySelectorAll('.resize-handle').forEach(h => h.remove());
+        if (!state.isDragging && !state.isResizing) {
+            if (state.selectedDeviceIds.size === 1) {
+                const dev = findDevice([...state.selectedDeviceIds][0]);
+                if (dev) renderResizeHandles(dev);
+            }
+            if (state.selectedTextboxId) {
+                const tb = findTextBox(state.selectedTextboxId);
+                if (tb) renderResizeHandles(tb);
+            }
+        }
+    }
+
+    function renderResizeHandles(element) {
+        const HANDLE_SIZE = 8;
+        const x = element.x;
+        const y = element.y;
+        const w = element._width || 100;
+        const h = element._height || 100;
+        const id = element.instanceId || element.textboxId;
+
+        const corners = [
+            { pos: 'nw', cx: x, cy: y, cursor: 'nwse-resize' },
+            { pos: 'ne', cx: x + w, cy: y, cursor: 'nesw-resize' },
+            { pos: 'sw', cx: x, cy: y + h, cursor: 'nesw-resize' },
+            { pos: 'se', cx: x + w, cy: y + h, cursor: 'nwse-resize' },
+        ];
+
+        corners.forEach(c => {
+            const rect = document.createElementNS(NS, 'rect');
+            rect.setAttribute('x', c.cx - HANDLE_SIZE / 2);
+            rect.setAttribute('y', c.cy - HANDLE_SIZE / 2);
+            rect.setAttribute('width', HANDLE_SIZE);
+            rect.setAttribute('height', HANDLE_SIZE);
+            rect.setAttribute('rx', 2);
+            rect.setAttribute('fill', '#0099CC');
+            rect.setAttribute('stroke', '#fff');
+            rect.setAttribute('stroke-width', 1.5);
+            rect.setAttribute('cursor', c.cursor);
+            rect.classList.add('resize-handle');
+            rect.dataset.handle = c.pos;
+            rect.dataset.elementId = id;
+            selectionLayer.appendChild(rect);
         });
     }
 
@@ -1459,8 +1862,8 @@
         const tgtPos = getPortWorldPosition(tgtDev, conn.targetPortId);
         if (!srcPos || !tgtPos) return;
 
-        const { pairLane, wideLane, groupBounds } = getConnectionLaneInfo(conn);
-        const d = calculateConnectionPath(srcPos, tgtPos, srcDev, tgtDev, pairLane, wideLane, groupBounds);
+        const { pairLane, wideLane, groupBounds, srcExitLane, tgtExitLane } = getConnectionLaneInfo(conn);
+        const d = calculateConnectionPath(srcPos, tgtPos, srcDev, tgtDev, pairLane, wideLane, groupBounds, srcExitLane, tgtExitLane);
 
         // Connection group
         const connGroup = document.createElementNS(NS, 'g');
@@ -1515,8 +1918,8 @@
             const tgtPos = getPortWorldPosition(tgtDev, conn.targetPortId);
             if (!srcPos || !tgtPos) return;
 
-            const { pairLane, wideLane, groupBounds } = getConnectionLaneInfo(conn);
-            const d = calculateConnectionPath(srcPos, tgtPos, srcDev, tgtDev, pairLane, wideLane, groupBounds);
+            const { pairLane, wideLane, groupBounds, srcExitLane, tgtExitLane } = getConnectionLaneInfo(conn);
+            const d = calculateConnectionPath(srcPos, tgtPos, srcDev, tgtDev, pairLane, wideLane, groupBounds, srcExitLane, tgtExitLane);
 
             const connGroup = connectionsLayer.querySelector(`.connection-group[data-connection-id="${conn.connectionId}"]`);
             if (connGroup) {
@@ -1566,16 +1969,41 @@
             right = Math.max(right, dev.x + (dev._width || 200));
         });
 
-        return { pairLane, wideLane, groupBounds: { left, right } };
+        // Per-device exit lane: stagger stubs based on port X position
+        function deviceExitLane(deviceId) {
+            const dev = findDevice(deviceId);
+            if (!dev || !dev._portPositions) return 0;
+
+            const devConns = state.connections.filter(c =>
+                c.sourceDeviceId === deviceId || c.targetDeviceId === deviceId
+            );
+            if (devConns.length <= 1) return 0;
+
+            const entries = devConns.map(c => {
+                const pId = c.sourceDeviceId === deviceId ? c.sourcePortId : c.targetPortId;
+                const pos = dev._portPositions[pId];
+                return { connectionId: c.connectionId, portX: pos ? pos.localX : 0 };
+            }).sort((a, b) => a.portX - b.portX);
+
+            return entries.findIndex(e => e.connectionId === conn.connectionId);
+        }
+
+        const srcExitLane = deviceExitLane(conn.sourceDeviceId);
+        const tgtExitLane = deviceExitLane(conn.targetDeviceId);
+
+        return { pairLane, wideLane, groupBounds: { left, right }, srcExitLane, tgtExitLane };
     }
 
-    function calculateConnectionPath(src, tgt, srcDev, tgtDev, pairLane, wideLane, groupBounds) {
+    function calculateConnectionPath(src, tgt, srcDev, tgtDev, pairLane, wideLane, groupBounds, srcExitLane, tgtExitLane) {
         const STUB = 30;
         const MARGIN = 25;
         const LANE_SPACING = 14;
+        const EXIT_SPACING = 10;
         const BEND_R = 8;
 
-        const pairOffset = (pairLane || 0) * LANE_SPACING;
+        const srcStub = STUB + (srcExitLane || 0) * EXIT_SPACING;
+        const tgtStub = STUB + (tgtExitLane || 0) * EXIT_SPACING;
+        const wideOffset = (wideLane || 0) * LANE_SPACING;
 
         // Get device bounding boxes
         const srcRight = srcDev.x + (srcDev._width || 200);
@@ -1583,14 +2011,15 @@
         const tgtRight = tgtDev.x + (tgtDev._width || 200);
         const tgtBottom = tgtDev.y + (tgtDev._height || 100);
 
-        // Exit points (below ports)
-        const srcExit = { x: src.x, y: src.y + STUB };
-        const tgtExit = { x: tgt.x, y: tgt.y + STUB };
+        // Exit points (below ports) - staggered per connection
+        const srcExit = { x: src.x, y: src.y + srcStub };
+        const tgtExit = { x: tgt.x, y: tgt.y + tgtStub };
 
-        // Case 1: devices roughly on the same horizontal line - use pairLane
-        const vertDist = Math.abs(src.y - tgt.y);
-        if (vertDist < 30) {
-            const midY = Math.max(srcExit.y, tgtExit.y) + MARGIN + Math.abs(pairOffset);
+        // Case 1: devices on the same visual row (tops within 75% of smaller device height)
+        const devVertDist = Math.abs(srcDev.y - tgtDev.y);
+        const sameRow = devVertDist < Math.min(srcDev._height || 100, tgtDev._height || 100) * 0.75;
+        if (sameRow) {
+            const midY = Math.max(srcExit.y, tgtExit.y) + MARGIN + wideOffset;
             return buildOrthogonalPath([
                 src, { x: src.x, y: midY }, { x: tgt.x, y: midY }, tgt
             ], BEND_R);
@@ -1601,17 +2030,17 @@
         const overlapRight = Math.min(srcRight, tgtRight);
         const hasOverlap = overlapLeft < overlapRight;
 
-        // Case 2: no overlap - route through gap - use pairLane
+        // Case 2: no horizontal overlap - route through gap
         if (!hasOverlap) {
             const topBottom = Math.min(srcBottom, tgtBottom);
             const botTop = Math.max(srcDev.y, tgtDev.y);
-            const midY = (topBottom + botTop) / 2 + pairOffset;
+            const midY = (topBottom + botTop) / 2 + wideOffset;
             return buildOrthogonalPath([
                 src, { x: src.x, y: midY }, { x: tgt.x, y: midY }, tgt
             ], BEND_R);
         }
 
-        // Case 3: devices overlap horizontally - route to the side - use wideLane
+        // Case 3: devices overlap horizontally - route to the side
         // Use group bounds so all connections sharing a device share the same reference edge
         const allLeft = groupBounds ? groupBounds.left : Math.min(srcDev.x, tgtDev.x);
         const allRight = groupBounds ? groupBounds.right : Math.max(srcRight, tgtRight);
@@ -1685,24 +2114,70 @@
         if (!dev) return;
         const catalog = getDeviceCatalogEntry(dev.modelId);
         if (!catalog) return;
+        const s = dev.scale || 1;
 
-        // Recalculate port positions
-        let portX = BODY_PADDING / 2;
-        const groups = groupPortsByGroup(catalog.ports);
-        const groupKeys = Object.keys(groups);
+        // Recalculate port positions based on device type (scaled)
         dev._portPositions = {};
 
-        groupKeys.forEach((key, gi) => {
-            groups[key].forEach(port => {
-                const pw = getPortWidth(port.type);
-                dev._portPositions[port.id] = {
-                    localX: portX + pw / 2,
-                    localY: LABEL_HEIGHT + 50 + PORT_HEIGHT / 2
-                };
-                portX += pw + PORT_GAP;
+        if (catalog.category === 'utilities') {
+            const cloudW = 160;
+            const cloudH = 90;
+            const labelY = 14;
+            const portLabelH = 10;
+            const port = catalog.ports[0];
+            dev._portPositions[port.id] = {
+                localX: (cloudW / 2) * s,
+                localY: (labelY + cloudH + portLabelH) * s
+            };
+        } else if (catalog.category === 'wireless') {
+            const groups = groupPortsByGroup(catalog.ports);
+            const groupKeys = Object.keys(groups);
+            let portsWidth = 0;
+            groupKeys.forEach((key, gi) => {
+                groups[key].forEach(port => {
+                    portsWidth += getPortWidth(port.type) + PORT_GAP;
+                });
+                if (gi < groupKeys.length - 1) portsWidth += GROUP_GAP;
             });
-            if (gi < groupKeys.length - 1) portX += GROUP_GAP;
-        });
+            const totalW = Math.max(AP_RADIUS * 2 + 20, portsWidth + BODY_PADDING * 2);
+            const circleBottom = LABEL_HEIGHT + AP_RADIUS * 2;
+            const portLabelH = 16;
+            const totalH = circleBottom + 4 + PORT_HEIGHT + portLabelH;
+
+            let portX = (totalW - portsWidth) / 2;
+            groupKeys.forEach((key, gi) => {
+                groups[key].forEach(port => {
+                    const pw = getPortWidth(port.type);
+                    dev._portPositions[port.id] = {
+                        localX: (portX + pw / 2) * s,
+                        localY: totalH * s
+                    };
+                    portX += pw + PORT_GAP;
+                });
+                if (gi < groupKeys.length - 1) portX += GROUP_GAP;
+            });
+        } else {
+            const bodyWidth = calculateDeviceWidth(catalog);
+            const bodyHeight = 56;
+            const portLabelHeight = 20;
+            const totalHeight = LABEL_HEIGHT + bodyHeight + portLabelHeight;
+
+            let portX = BODY_PADDING / 2;
+            const groups = groupPortsByGroup(catalog.ports);
+            const groupKeys = Object.keys(groups);
+
+            groupKeys.forEach((key, gi) => {
+                groups[key].forEach(port => {
+                    const pw = getPortWidth(port.type);
+                    dev._portPositions[port.id] = {
+                        localX: (portX + pw / 2) * s,
+                        localY: totalHeight * s
+                    };
+                    portX += pw + PORT_GAP;
+                });
+                if (gi < groupKeys.length - 1) portX += GROUP_GAP;
+            });
+        }
 
         // Update connection lines
         state.connections.forEach(conn => {
@@ -1716,8 +2191,8 @@
             const tgtPos = getPortWorldPosition(tgtDev, conn.targetPortId);
             if (!srcPos || !tgtPos) return;
 
-            const { pairLane, wideLane, groupBounds } = getConnectionLaneInfo(conn);
-            const d = calculateConnectionPath(srcPos, tgtPos, srcDev, tgtDev, pairLane, wideLane, groupBounds);
+            const { pairLane, wideLane, groupBounds, srcExitLane, tgtExitLane } = getConnectionLaneInfo(conn);
+            const d = calculateConnectionPath(srcPos, tgtPos, srcDev, tgtDev, pairLane, wideLane, groupBounds, srcExitLane, tgtExitLane);
 
             const connGroup = connectionsLayer.querySelector(`.connection-group[data-connection-id="${conn.connectionId}"]`);
             if (connGroup) {
@@ -1972,7 +2447,8 @@
                 modelId: d.modelId,
                 label: d.label,
                 x: d.x,
-                y: d.y
+                y: d.y,
+                scale: d.scale || 1
             })),
             connections: state.connections.map(c => ({
                 connectionId: c.connectionId,
@@ -1988,7 +2464,8 @@
                 text: tb.text,
                 x: tb.x,
                 y: tb.y,
-                fontSize: tb.fontSize
+                fontSize: tb.fontSize,
+                scale: tb.scale || 1
             })),
             nextId: state.nextId
         });
@@ -2018,6 +2495,7 @@
                 label: d.label,
                 x: d.x,
                 y: d.y,
+                scale: d.scale || 1,
                 _portPositions: {},
                 _width: 0,
                 _height: 0
@@ -2049,7 +2527,8 @@
                 text: tb.text,
                 x: tb.x,
                 y: tb.y,
-                fontSize: tb.fontSize || 14
+                fontSize: tb.fontSize || 14,
+                scale: tb.scale || 1
             };
             state.textboxes.push(textbox);
             const svgEl = renderTextBoxSVG(textbox);
@@ -2105,60 +2584,85 @@
 
     // ======================== EXPORT ========================
     // ======================== COMPANY LOGO ========================
-    let companyLogo = null; // { dataUrl, width, height }
+    let companyLogos = []; // Array of { dataUrl, width, height }
+
+    function updateLogoButtonText() {
+        const count = companyLogos.length;
+        document.getElementById('logo-btn-text').textContent = count > 0 ? `Logo (${count})` : 'Logo';
+    }
+
+    function saveLogos() {
+        localStorage.setItem('mikrotik-logos', JSON.stringify(companyLogos));
+        updateLogoButtonText();
+    }
 
     function setupLogo() {
         const logoInput = document.getElementById('logo-input');
-        document.getElementById('btn-logo').addEventListener('click', () => {
-            if (companyLogo) {
-                // Show menu: change or remove
-                const btn = document.getElementById('btn-logo');
-                const r = btn.getBoundingClientRect();
-                showContextMenu(r.left, r.bottom + 4, [
-                    { label: 'Change Logo', action: () => logoInput.click() },
-                    { label: 'Remove Logo', action: () => {
-                        companyLogo = null;
-                        localStorage.removeItem('mikrotik-logo');
-                        document.getElementById('logo-btn-text').textContent = 'Logo';
-                    }},
-                ]);
+        document.getElementById('btn-logo').addEventListener('click', (e) => {
+            e.stopPropagation();
+            const btn = document.getElementById('btn-logo');
+            const r = btn.getBoundingClientRect();
+            if (companyLogos.length > 0) {
+                const items = [
+                    { label: 'Add Logo', action: () => logoInput.click() },
+                ];
+                companyLogos.forEach((logo, i) => {
+                    items.push({ label: `Remove Logo ${i + 1}`, action: () => {
+                        companyLogos.splice(i, 1);
+                        saveLogos();
+                    }});
+                });
+                items.push({ label: 'Remove All Logos', action: () => {
+                    companyLogos = [];
+                    localStorage.removeItem('mikrotik-logos');
+                    updateLogoButtonText();
+                }});
+                showContextMenu(r.left, r.bottom + 4, items);
             } else {
                 logoInput.click();
             }
         });
 
         logoInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-                const img = new Image();
-                img.onload = () => {
-                    // Convert to JPEG always (for PDF compatibility)
-                    const c = document.createElement('canvas');
-                    c.width = img.width;
-                    c.height = img.height;
-                    const cx = c.getContext('2d');
-                    cx.fillStyle = '#ffffff';
-                    cx.fillRect(0, 0, c.width, c.height);
-                    cx.drawImage(img, 0, 0);
-                    const jpegUrl = c.toDataURL('image/jpeg', 0.92);
-                    companyLogo = { dataUrl: jpegUrl, width: img.width, height: img.height };
-                    localStorage.setItem('mikrotik-logo', JSON.stringify(companyLogo));
-                    document.getElementById('logo-btn-text').textContent = 'Logo \u2713';
+            const files = Array.from(e.target.files);
+            if (!files.length) return;
+            files.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const c = document.createElement('canvas');
+                        c.width = img.width;
+                        c.height = img.height;
+                        const cx = c.getContext('2d');
+                        cx.fillStyle = '#ffffff';
+                        cx.fillRect(0, 0, c.width, c.height);
+                        cx.drawImage(img, 0, 0);
+                        const jpegUrl = c.toDataURL('image/jpeg', 0.92);
+                        companyLogos.push({ dataUrl: jpegUrl, width: img.width, height: img.height });
+                        saveLogos();
+                    };
+                    img.src = ev.target.result;
                 };
-                img.src = ev.target.result;
-            };
-            reader.readAsDataURL(file);
+                reader.readAsDataURL(file);
+            });
             logoInput.value = '';
         });
 
-        // Load saved logo
+        // Load saved logos (support both old single and new multi format)
         try {
-            const saved = localStorage.getItem('mikrotik-logo');
+            const saved = localStorage.getItem('mikrotik-logos');
             if (saved) {
-                companyLogo = JSON.parse(saved);
-                document.getElementById('logo-btn-text').textContent = 'Logo \u2713';
+                companyLogos = JSON.parse(saved);
+                updateLogoButtonText();
+            } else {
+                // Migrate old single logo if exists
+                const oldSaved = localStorage.getItem('mikrotik-logo');
+                if (oldSaved) {
+                    companyLogos = [JSON.parse(oldSaved)];
+                    localStorage.removeItem('mikrotik-logo');
+                    saveLogos();
+                }
             }
         } catch (e) {}
     }
@@ -2255,7 +2759,7 @@
         // Page 1: diagram (landscape A4)
         const pageW = 842, pageH = 595;
         const margin = 36;
-        const logoAreaH = companyLogo ? 50 : 0;
+        const logoAreaH = companyLogos.length > 0 ? 50 : 0;
 
         // Render connection table to a canvas (page 2, portrait A4)
         const p2W = 595, p2H = 842;
@@ -2269,19 +2773,18 @@
         const tableJpeg = tableCanvas.toDataURL('image/jpeg', 0.95);
         const tableBytes = base64ToBytes(tableJpeg.split(',')[1]);
 
-        // Logo bytes (if any, always JPEG from upload conversion)
-        let logoBytes = null;
-        if (companyLogo) {
-            const parts = companyLogo.dataUrl.split(',');
-            logoBytes = base64ToBytes(parts[1]);
-        }
+        // Logo bytes array (always JPEG from upload conversion)
+        const logoBytesArr = companyLogos.map(logo => {
+            const parts = logo.dataUrl.split(',');
+            return base64ToBytes(parts[1]);
+        });
 
         // Assemble PDF with multiple pages and images
         assemblePDF({
             pageW, pageH, p2W, p2H, margin, logoAreaH,
             diagramCanvas, diagBytes,
             tableCanvas, tableBytes,
-            logoBytes
+            logoBytesArr
         });
     }
 
@@ -2437,7 +2940,7 @@
     function assemblePDF(opts) {
         const { pageW, pageH, p2W, p2H, margin, logoAreaH,
                 diagramCanvas, diagBytes, tableCanvas, tableBytes,
-                logoBytes } = opts;
+                logoBytesArr } = opts;
 
         // PDF coordinate helper (PDF origin is bottom-left)
         const objTexts = []; // text parts of each object
@@ -2491,18 +2994,20 @@
             tableBytes
         );
 
-        // 6: Logo image (if any, always JPEG)
-        let logoObjNum = 0;
-        let logoDrawW = 0, logoDrawH = 0;
-        if (logoBytes && companyLogo) {
-            const maxLogoH = 35;
-            const logoScale = maxLogoH / companyLogo.height;
-            logoDrawW = companyLogo.width * logoScale;
-            logoDrawH = maxLogoH;
-            logoObjNum = addObj(
-                `<< /Type /XObject /Subtype /Image /Width ${companyLogo.width} /Height ${companyLogo.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${logoBytes.length} >>\nstream\n`,
-                logoBytes
+        // 6+: Logo images (multiple, always JPEG)
+        const logoObjs = []; // { objNum, drawW, drawH }
+        const maxLogoH = 35;
+        for (let i = 0; i < logoBytesArr.length; i++) {
+            const logo = companyLogos[i];
+            const bytes = logoBytesArr[i];
+            const logoScale = maxLogoH / logo.height;
+            const drawW = logo.width * logoScale;
+            const drawH = maxLogoH;
+            const objNum = addObj(
+                `<< /Type /XObject /Subtype /Image /Width ${logo.width} /Height ${logo.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${bytes.length} >>\nstream\n`,
+                bytes
             );
+            logoObjs.push({ objNum, drawW, drawH });
         }
 
         // 7: Page 1 content stream
@@ -2511,33 +3016,43 @@
         p1Stream += `BT /F1 14 Tf 0.9 0.93 0.95 rg ${margin} ${(pageH - margin + 8).toFixed(2)} Td (Network Diagram) Tj ET\n`;
         // Date
         p1Stream += `BT /F1 8 Tf 0.55 0.58 0.62 rg ${(pageW - margin - 120).toFixed(2)} ${(pageH - margin + 8).toFixed(2)} Td (${new Date().toLocaleDateString()}) Tj ET\n`;
-        // Logo on page 1
-        if (logoObjNum) {
-            const lx = (pageW - logoDrawW) / 2;
+        // Logos on page 1 (centered, side by side with 10px gap)
+        if (logoObjs.length > 0) {
+            const logoGap = 10;
+            const totalLogosW = logoObjs.reduce((s, l) => s + l.drawW, 0) + (logoObjs.length - 1) * logoGap;
+            let lx = (pageW - totalLogosW) / 2;
             const ly = 14;
-            p1Stream += `q ${logoDrawW.toFixed(2)} 0 0 ${logoDrawH.toFixed(2)} ${lx.toFixed(2)} ${ly.toFixed(2)} cm /Logo Do Q\n`;
+            logoObjs.forEach((l, i) => {
+                p1Stream += `q ${l.drawW.toFixed(2)} 0 0 ${l.drawH.toFixed(2)} ${lx.toFixed(2)} ${ly.toFixed(2)} cm /Logo${i} Do Q\n`;
+                lx += l.drawW + logoGap;
+            });
         }
         const p1StreamIdx = addObj(`<< /Length ${p1Stream.length} >>\nstream\n${p1Stream}\nendstream`);
 
         // 8: Page 1
         let p1Resources = '/Font << /F1 3 0 R >> /XObject << /Img0 4 0 R';
-        if (logoObjNum) p1Resources += ` /Logo ${logoObjNum} 0 R`;
+        logoObjs.forEach((l, i) => { p1Resources += ` /Logo${i} ${l.objNum} 0 R`; });
         p1Resources += ' >>';
         const page1Idx = addObj(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageW} ${pageH}] /Contents ${p1StreamIdx} 0 R /Resources << ${p1Resources} >> >>`);
 
         // 9: Page 2 content stream
         let p2Stream = `q ${tW.toFixed(2)} 0 0 ${tH.toFixed(2)} ${tX.toFixed(2)} ${tY.toFixed(2)} cm /Img1 Do Q\n`;
-        // Logo on page 2
-        if (logoObjNum) {
-            const lx = (p2W - logoDrawW) / 2;
+        // Logos on page 2 (centered, side by side)
+        if (logoObjs.length > 0) {
+            const logoGap = 10;
+            const totalLogosW = logoObjs.reduce((s, l) => s + l.drawW, 0) + (logoObjs.length - 1) * logoGap;
+            let lx = (p2W - totalLogosW) / 2;
             const ly = 14;
-            p2Stream += `q ${logoDrawW.toFixed(2)} 0 0 ${logoDrawH.toFixed(2)} ${lx.toFixed(2)} ${ly.toFixed(2)} cm /Logo Do Q\n`;
+            logoObjs.forEach((l, i) => {
+                p2Stream += `q ${l.drawW.toFixed(2)} 0 0 ${l.drawH.toFixed(2)} ${lx.toFixed(2)} ${ly.toFixed(2)} cm /Logo${i} Do Q\n`;
+                lx += l.drawW + logoGap;
+            });
         }
         const p2StreamIdx = addObj(`<< /Length ${p2Stream.length} >>\nstream\n${p2Stream}\nendstream`);
 
         // 10: Page 2
         let p2Resources = '/Font << /F1 3 0 R >> /XObject << /Img1 5 0 R';
-        if (logoObjNum) p2Resources += ` /Logo ${logoObjNum} 0 R`;
+        logoObjs.forEach((l, i) => { p2Resources += ` /Logo${i} ${l.objNum} 0 R`; });
         p2Resources += ' >>';
         const page2Idx = addObj(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${p2W} ${p2H}] /Contents ${p2StreamIdx} 0 R /Resources << ${p2Resources} >> >>`);
 
